@@ -1,0 +1,58 @@
+# ========================================
+# ПРИЗМА - ИГНОРИРАНИ ФАЙЛОВЕ
+# ========================================
+
+# Зависимости
+/node_modules
+/.pnp
+.pnp.js
+
+# Тестова покритост
+/coverage
+
+# Next.js
+/.next/
+/out/
+
+# Production build
+/build
+
+# Разни
+.DS_Store
+*.pem
+
+# Логове за грешки
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Локални env файлове - ВАЖНО: Съдържат чувствителни данни!
+.env*.local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE файлове
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Временни файлове
+*.tmp
+*.temp
+
+# Supabase
+.supabase/
+
+# Други чувствителни файлове
+secrets.json
+private-keys/
