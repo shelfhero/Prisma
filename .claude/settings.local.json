@@ -2,7 +2,23 @@
   "permissions": {
     "allow": [
       "Bash(mkdir:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git config:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm install:*)",
+      "Bash(npm audit:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node:*)",
+      "Bash(start https://supabase.com/dashboard/project/eisfwocfkejsxipmbyzp/auth/users)",
+      "Bash(start https://supabase.com/dashboard/project/eisfwocfkejsxipmbyzp/auth/email-templates)",
+      "Bash(start https://supabase.com/dashboard/project/eisfwocfkejsxipmbyzp/sql)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx supabase:*)",
+      "Bash(taskkill:*)",
+      "Bash(curl:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []

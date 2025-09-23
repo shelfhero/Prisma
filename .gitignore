@@ -33,6 +33,10 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# Google Cloud credentials
+google-vision-key.json
+*.json
+
 # Vercel
 .vercel
 

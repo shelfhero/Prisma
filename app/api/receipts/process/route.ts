@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
+import { processReceiptWithGoogleVision } from '@/lib/google-vision-ocr';
 
 // Bulgarian error messages
 const ERRORS = {
@@ -250,7 +251,7 @@ async function uploadImageToStorage(
   userId: string,
   receiptId: string,
   imageIndex: number
-): Promise<{ path: string; width?: number; height?: number }> {
+): Promise<{ path: string }> {
   const fileExtension = file.name.split('.').pop() || 'jpg';
   const fileName = `image_${imageIndex}.${fileExtension}`;
   const storagePath = `receipts/${userId}/${receiptId}/${fileName}`;
@@ -266,82 +267,208 @@ async function uploadImageToStorage(
     throw new Error(`Storage upload failed: ${error.message}`);
   }
 
-  // Get image dimensions if possible
-  let width: number | undefined;
-  let height: number | undefined;
+  // Note: Image dimensions would require additional server-side libraries
+  // For now, skip dimensions as they're not critical for functionality
 
-  try {
-    // Create image to get dimensions
-    const imageUrl = URL.createObjectURL(file);
-    const img = new Image();
-
-    await new Promise((resolve, reject) => {
-      img.onload = () => {
-        width = img.naturalWidth;
-        height = img.naturalHeight;
-        URL.revokeObjectURL(imageUrl);
-        resolve(void 0);
-      };
-      img.onerror = reject;
-      img.src = imageUrl;
-    });
-  } catch (error) {
-    // Dimensions not critical, continue without them
-    console.warn('Could not get image dimensions:', error);
-  }
-
-  return { path: storagePath, width, height };
+  return { path: storagePath };
 }
 
-async function callTabscannerAPI(imageFiles: File[]): Promise<TabscannerResponse> {
-  const tabscannerEndpoint = process.env.TABSCANNER_ENDPOINT!;
-  const tabscannerApiKey = process.env.TABSCANNER_API_KEY!;
+async function processReceiptOCR(imageFiles: File[]): Promise<TabscannerResponse> {
+  // Try Google Cloud Vision first - Check for ANY valid configuration
+  const hasProjectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+  const hasApiKey = process.env.GOOGLE_CLOUD_API_KEY;
+  const hasCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  const hasGoogleVision = hasProjectId || hasApiKey || hasCredentials;
 
-  if (!tabscannerEndpoint || !tabscannerApiKey) {
-    throw new Error('Tabscanner configuration missing');
-  }
+  console.log('🔧 OCR Processing Debug:');
+  console.log(`   Google Vision configured: ${hasGoogleVision ? 'YES' : 'NO'}`);
+  console.log(`   PROJECT_ID: ${hasProjectId ? 'SET' : 'NOT SET'}`);
+  console.log(`   API_KEY: ${hasApiKey ? 'SET' : 'NOT SET'}`);
+  console.log(`   CREDENTIALS: ${hasCredentials ? 'SET' : 'NOT SET'}`);
+  console.log(`   Image files: ${imageFiles.length}`);
 
-  const formData = new FormData();
+  if (hasGoogleVision && imageFiles.length > 0) {
+    try {
+      console.log('🤖 Using Enhanced Google Cloud Vision for OCR...');
 
-  // Add API key
-  formData.append('api_key', tabscannerApiKey);
+      // Convert first image file to buffer
+      const firstImage = imageFiles[0];
+      const imageBuffer = Buffer.from(await firstImage.arrayBuffer());
 
-  // Add images
-  imageFiles.forEach((file, index) => {
-    formData.append(`image_${index}`, file);
-  });
+      // Use enhanced OCR with debug mode in development
+      const debugMode = process.env.NODE_ENV === 'development';
+      const result = await processReceiptWithGoogleVision(imageBuffer, debugMode);
 
-  // Add processing options
-  formData.append('language', 'bg'); // Bulgarian language
-  formData.append('currency', 'BGN');
-  formData.append('return_raw_text', 'true');
+      if (result.success && result.receipt) {
+        console.log('✅ Enhanced Google Vision OCR successful');
 
-  const response = await fetch(tabscannerEndpoint, {
-    method: 'POST',
-    body: formData,
-    headers: {
-      'User-Agent': 'Призма-App/1.0'
+        if (result.qualityReport) {
+          console.log(`📊 Quality Report: ${result.qualityReport.issues} issues, ${result.qualityReport.processingTime}ms`);
+          if (result.qualityReport.suggestions.length > 0) {
+            console.log('💡 Suggestions:', result.qualityReport.suggestions.join('; '));
+          }
+        }
+
+        if (result.extraction) {
+          console.log(`🏪 Store: ${result.extraction.retailer} (${result.extraction.metadata.detectedStore?.type || 'unknown'})`);
+          console.log(`💰 Total: ${result.extraction.total} лв (validation: ${result.extraction.metadata.totalValidation.valid ? '✅' : '❌'})`);
+          console.log(`📦 Items: ${result.extraction.items.length} (avg confidence: ${Math.round(result.extraction.items.reduce((sum, item) => sum + item.confidence, 0) / result.extraction.items.length * 100)}%)`);
+
+          // Log categorized items
+          const categorized = result.extraction.items.filter(item => item.category && item.category !== 'Други');
+          if (categorized.length > 0) {
+            console.log(`📋 Auto-categorized: ${categorized.length}/${result.extraction.items.length} items`);
+          }
+        }
+
+        return {
+          success: true,
+          receipt: {
+            retailer: result.receipt.retailer,
+            total: result.receipt.total,
+            date: result.receipt.date,
+            items: result.receipt.items.map(item => ({
+              name: item.name,
+              price: item.price,
+              quantity: item.quantity || 1,
+              barcode: item.barcode
+            }))
+          },
+          raw_text: result.raw_text || '',
+          confidence: result.confidence || 95
+        };
+      } else {
+        console.warn('⚠️ Google Vision OCR failed, but config is present');
+        if (result.extraction && result.extraction.qualityIssues.length > 0) {
+          console.log('❌ Quality Issues:', result.extraction.qualityIssues.map(issue => issue.description).join('; '));
+        }
+        // Don't fall back immediately - let's show the error
+        throw new Error(`Google Vision OCR failed: ${result.raw_text || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('❌ Google Vision error:', error);
+      // Re-throw to show user the actual error instead of hiding it with mock data
+      throw new Error(`Google Vision API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-  });
-
-  if (!response.ok) {
-    throw new Error(`Tabscanner API error: ${response.status} ${response.statusText}`);
   }
 
-  const result: TabscannerResponse = await response.json();
+  // Fallback to TabScanner if Google Vision is not configured
+  const tabscannerEndpoint = process.env.TABSCANNER_ENDPOINT;
+  const tabscannerApiKey = process.env.TABSCANNER_API_KEY;
 
-  if (!result.success) {
-    throw new Error('Tabscanner processing failed');
+  if (tabscannerEndpoint && tabscannerApiKey) {
+    try {
+      console.log('🔄 Fallback: Trying TabScanner API...');
+
+      const formData = new FormData();
+      formData.append('api_key', tabscannerApiKey);
+
+      imageFiles.forEach((file, index) => {
+        formData.append(`image_${index}`, file);
+      });
+
+      formData.append('language', 'bg');
+      formData.append('currency', 'BGN');
+      formData.append('return_raw_text', 'true');
+
+      const response = await fetch(tabscannerEndpoint, {
+        method: 'POST',
+        body: formData,
+        headers: { 'User-Agent': 'Prizma-App/1.0' }
+      });
+
+      if (response.ok) {
+        const result: TabscannerResponse = await response.json();
+        if (result.success) {
+          console.log('✅ TabScanner OCR successful');
+          return result;
+        }
+      }
+      console.warn('❌ TabScanner API failed');
+    } catch (error) {
+      console.error('❌ TabScanner error:', error);
+    }
   }
 
-  return result;
+  // If both real OCR options failed, throw error instead of using mock data
+  if (hasGoogleVision || tabscannerEndpoint) {
+    throw new Error('All OCR services failed. Please check your receipt image quality and try again.');
+  }
+
+  // Only use mock data in development when no OCR is configured
+  if (process.env.NODE_ENV === 'development') {
+    console.log('⚠️ Development mode: Using mock OCR data (no OCR services configured)');
+    return createMockOCRResponse(imageFiles);
+  }
+
+  throw new Error('No OCR services are configured. Please contact support.');
+}
+
+// Enhanced mock OCR function that simulates real receipt parsing
+function createMockOCRResponse(imageFiles: File[]): TabscannerResponse {
+  const now = new Date();
+
+  // Realistic Bulgarian retailers
+  const retailers = [
+    'Лидл България', 'Фантастико', 'Билла', 'Кауфланд', 'Т-Маркет',
+    'Пикадили', 'МЕТРО', 'Технополис', 'ОМВ', 'Шел'
+  ];
+
+  // Common Bulgarian products with realistic prices
+  const productTemplates = [
+    { names: ['Хляб пълнозърнест', 'Хляб бял', 'Питка'], priceRange: [0.85, 1.50] },
+    { names: ['Мляко прясно 3.6%', 'Мляко краве 2.8%'], priceRange: [2.20, 2.80] },
+    { names: ['Яйца свежи', 'Яйца M размер'], priceRange: [4.50, 5.20] },
+    { names: ['Домати розови', 'Домати червени'], priceRange: [3.80, 4.50] },
+    { names: ['Банани', 'Банани Еквадор'], priceRange: [2.90, 3.50] },
+    { names: ['Сирене бяло краве', 'Кашкавал'], priceRange: [12.50, 18.90] },
+    { names: ['Олио слънчогледово', 'Олио рапично'], priceRange: [4.20, 6.80] },
+    { names: ['Ориз басмати', 'Ориз дълъг'], priceRange: [3.50, 5.20] },
+    { names: ['Кафе разтворимо', 'Кафе мляно'], priceRange: [8.90, 15.50] },
+    { names: ['Вода минерална', 'Вода изворна'], priceRange: [0.65, 1.20] }
+  ];
+
+  // Generate realistic receipt data
+  const retailer = retailers[Math.floor(Math.random() * retailers.length)];
+  const itemCount = Math.floor(Math.random() * 6) + 3; // 3-8 items
+  const items = [];
+
+  for (let i = 0; i < itemCount; i++) {
+    const template = productTemplates[Math.floor(Math.random() * productTemplates.length)];
+    const name = template.names[Math.floor(Math.random() * template.names.length)];
+    const basePrice = template.priceRange[0] + Math.random() * (template.priceRange[1] - template.priceRange[0]);
+    const price = Math.round(basePrice * 100) / 100; // Round to 2 decimals
+    const quantity = Math.random() < 0.8 ? 1 : Math.floor(Math.random() * 3) + 2; // Usually 1, sometimes 2-4
+
+    items.push({
+      name,
+      price,
+      quantity
+    });
+  }
+
+  const total = Math.round(items.reduce((sum, item) => sum + (item.price * item.quantity), 0) * 100) / 100;
+
+  // Simulate realistic processing time variation
+  const confidence = Math.floor(Math.random() * 15) + 85; // 85-99% confidence
+
+  return {
+    success: true,
+    receipt: {
+      retailer,
+      total,
+      date: now.toISOString(),
+      items
+    },
+    raw_text: `Касова бележка от ${retailer}\nДата: ${now.toLocaleDateString('bg-BG')}\nОбща сума: ${total.toFixed(2)} лв.\n${items.map(item => `${item.name} x${item.quantity} = ${(item.price * item.quantity).toFixed(2)} лв.`).join('\n')}`,
+    confidence
+  };
 }
 
 async function saveReceiptToDatabase(
   userId: string,
-  receiptId: string,
   tabscannerResponse: TabscannerResponse,
-  imagePaths: Array<{ path: string; width?: number; height?: number }>
+  imageFiles: File[]
 ): Promise<{ receiptId: string; totalAmount: number; itemsCount: number }> {
   const receipt = tabscannerResponse.receipt;
 
@@ -356,11 +483,10 @@ async function saveReceiptToDatabase(
   const totalAmount = receipt.total || 0;
   const purchasedAt = receipt.date || new Date().toISOString();
 
-  // Insert receipt
+  // Insert receipt (let database auto-generate ID)
   const { data: receiptData, error: receiptError } = await supabase
     .from('receipts')
     .insert({
-      id: receiptId,
       user_id: userId,
       retailer_id: retailerId,
       total_amount: totalAmount,
@@ -375,20 +501,29 @@ async function saveReceiptToDatabase(
     throw new Error(`Receipt insert failed: ${receiptError.message}`);
   }
 
-  // Insert receipt images
-  for (const imagePath of imagePaths) {
-    const { error: imageError } = await supabase
-      .from('receipt_images')
-      .insert({
-        receipt_id: receiptId,
-        storage_path: imagePath.path,
-        width: imagePath.width || null,
-        height: imagePath.height || null
-      });
+  const receiptId = receiptData.id;
 
-    if (imageError) {
-      console.error('Image insert failed:', imageError);
-      // Don't throw here, images are not critical
+  // Upload and store images
+  for (let i = 0; i < imageFiles.length; i++) {
+    try {
+      const imagePath = await uploadImageToStorage(imageFiles[i], userId, receiptId, i);
+
+      const { error: imageError } = await supabase
+        .from('receipt_images')
+        .insert({
+          receipt_id: receiptId,
+          storage_path: imagePath.path,
+          width: null,
+          height: null
+        });
+
+      if (imageError) {
+        console.error('Image insert failed:', imageError);
+        // Don't throw here, images are not critical
+      }
+    } catch (imageError) {
+      console.error('Image upload/storage failed:', imageError);
+      // Continue with other images
     }
   }
 
@@ -538,50 +673,91 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate unique receipt ID
-    const receiptId = uuidv4();
+    // Generate unique receipt ID (will be auto-generated by database)
+    let receiptId: string;
 
     try {
-      // Upload images to Supabase Storage
-      const imagePaths: Array<{ path: string; width?: number; height?: number }> = [];
+      // Process with OCR (Google Vision → TabScanner → Mock)
+      const tabscannerResponse = await processReceiptOCR(files);
 
-      for (let i = 0; i < files.length; i++) {
-        const imagePath = await uploadImageToStorage(files[i], userId, receiptId, i);
-        imagePaths.push(imagePath);
-      }
-
-      // Process with Tabscanner API
-      const tabscannerResponse = await callTabscannerAPI(files);
-
-      // Save to database
+      // Save to database (this will generate the receiptId)
       const result = await saveReceiptToDatabase(
         userId,
-        receiptId,
         tabscannerResponse,
-        imagePaths
+        files
       );
 
+      receiptId = result.receiptId;
+
       // Return success response
+      const isGoogleVision = tabscannerResponse.confidence && tabscannerResponse.confidence >= 50 && tabscannerResponse.confidence < 100;
+      const isTabScanner = tabscannerResponse.confidence === 100;
+      const isMockOCR = tabscannerResponse.confidence && tabscannerResponse.confidence >= 85 && tabscannerResponse.confidence < 100 && !isGoogleVision;
+
+      let message: string = SUCCESS.PROCESSING_COMPLETE;
+      let status = 'completed';
+      let processingDetails: any = {};
+
+      if (isGoogleVision) {
+        message = `🤖 Касовата бележка е прочетена с Enhanced Google Vision OCR (${tabscannerResponse.confidence}% точност)`;
+        status = 'google_vision_enhanced_processed';
+
+        // Add enhanced processing details if available
+        if ((tabscannerResponse as any).qualityReport) {
+          const qualityReport = (tabscannerResponse as any).qualityReport;
+          processingDetails = {
+            qualityIssues: qualityReport.issues,
+            processingTime: qualityReport.processingTime,
+            suggestions: qualityReport.suggestions
+          };
+
+          if (qualityReport.issues === 0) {
+            message += ' - ✅ Пълно качество';
+          } else if (qualityReport.issues <= 2) {
+            message += ` - ⚠️ ${qualityReport.issues} проблема`;
+          } else {
+            message += ` - ❌ ${qualityReport.issues} проблема`;
+          }
+        }
+      } else if (isTabScanner) {
+        message = `📄 Касовата бележка е обработена с TabScanner (${tabscannerResponse.confidence}% точност)`;
+        status = 'tabscanner_processed';
+      } else if (isMockOCR) {
+        message = `🧪 Касовата бележка е обработена със симулирано OCR (${tabscannerResponse.confidence}% увереност)`;
+        status = 'mock_ocr_processed';
+      }
+
       return NextResponse.json({
         success: true,
-        message: SUCCESS.PROCESSING_COMPLETE,
+        message,
         data: {
           receipt_id: result.receiptId,
           total_amount: result.totalAmount,
           items_count: result.itemsCount,
-          processing_status: 'completed',
-          currency: 'BGN'
+          processing_status: status,
+          currency: 'BGN',
+          confidence: tabscannerResponse.confidence,
+          retailer: tabscannerResponse.receipt?.retailer,
+          processing_details: processingDetails,
+          enhanced_features: {
+            store_detection: isGoogleVision,
+            product_categorization: isGoogleVision,
+            quality_scoring: isGoogleVision,
+            bulgarian_recognition: isGoogleVision
+          }
         }
       });
 
     } catch (processingError) {
-      // Cleanup on failure
-      await cleanupFailedUpload(userId, receiptId);
+      // Cleanup on failure (only if receiptId was generated)
+      if (receiptId!) {
+        await cleanupFailedUpload(userId, receiptId!);
+      }
 
       console.error('Processing error:', processingError);
 
       // Determine specific error type
-      let errorMessage = ERRORS.PROCESSING_ERROR;
+      let errorMessage: string = ERRORS.PROCESSING_ERROR;
 
       if (processingError instanceof Error) {
         if (processingError.message.includes('Tabscanner')) {

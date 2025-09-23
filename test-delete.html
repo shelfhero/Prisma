@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Delete</title>
+</head>
+<body>
+    <h1>Test Delete API</h1>
+    <button onclick="testDelete()">Test DELETE Request</button>
+    <div id="result"></div>
+
+    <script>
+        async function testDelete() {
+            console.log('Testing DELETE request...');
+            try {
+                const response = await fetch('/api/receipts?id=999', {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': 'Bearer fake-token',
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                console.log('Response status:', response.status);
+                const result = await response.text();
+                console.log('Response:', result);
+
+                document.getElementById('result').innerHTML = `
+                    <p>Status: ${response.status}</p>
+                    <p>Response: ${result}</p>
+                `;
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('result').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
