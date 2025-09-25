@@ -1,0 +1,214 @@
+/**
+ * Test script for Enhanced Receipt Processing with Dual OCR
+ * Tests Google Vision + GPT-4 Vision integration and reconciliation
+ */
+
+// Load Next.js environment variables
+import { loadEnvConfig } from '@next/env';
+loadEnvConfig(process.cwd());
+
+import { testGoogleVisionSetup } from './google-vision-ocr';
+import { testGPTVisionSetup } from './gpt-vision-ocr';
+
+interface TestResult {
+  component: string;
+  configured: boolean;
+  working: boolean;
+  details: string;
+}
+
+/**
+ * Test all OCR components and their configuration
+ */
+export async function testEnhancedOCRSystem(): Promise<{
+  success: boolean;
+  results: TestResult[];
+  recommendation: string;
+}> {
+  console.log('🧪 Testing Enhanced OCR System...\n');
+
+  const results: TestResult[] = [];
+
+  // Test 1: Google Vision OCR
+  console.log('1. Testing Google Vision OCR...');
+  try {
+    const googleVisionConfigured = process.env.GOOGLE_CLOUD_PROJECT_ID ||
+                                   process.env.GOOGLE_CLOUD_API_KEY ||
+                                   process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    const googleVisionWorking = googleVisionConfigured ? await testGoogleVisionSetup() : false;
+
+    results.push({
+      component: 'Google Vision OCR',
+      configured: !!googleVisionConfigured,
+      working: googleVisionWorking,
+      details: googleVisionConfigured ?
+        (googleVisionWorking ? 'Configured and working correctly' : 'Configured but authentication/access failed') :
+        'Not configured - missing GOOGLE_CLOUD_PROJECT_ID, GOOGLE_CLOUD_API_KEY, or GOOGLE_APPLICATION_CREDENTIALS'
+    });
+
+    console.log(`   ${googleVisionWorking ? '✅' : '❌'} Google Vision: ${results[results.length - 1].details}\n`);
+  } catch (error) {
+    results.push({
+      component: 'Google Vision OCR',
+      configured: false,
+      working: false,
+      details: `Test failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+    });
+    console.log(`   ❌ Google Vision: Test failed\n`);
+  }
+
+  // Test 2: GPT-4 Vision
+  console.log('2. Testing GPT-4 Vision...');
+  try {
+    const gptVisionConfigured = !!process.env.OPENAI_API_KEY;
+    const gptVisionWorking = gptVisionConfigured ? await testGPTVisionSetup() : false;
+
+    results.push({
+      component: 'GPT-4 Vision',
+      configured: gptVisionConfigured,
+      working: gptVisionWorking,
+      details: gptVisionConfigured ?
+        (gptVisionWorking ? 'Configured and working correctly' : 'Configured but API access failed') :
+        'Not configured - missing OPENAI_API_KEY'
+    });
+
+    console.log(`   ${gptVisionWorking ? '✅' : '❌'} GPT-4 Vision: ${results[results.length - 1].details}\n`);
+  } catch (error) {
+    results.push({
+      component: 'GPT-4 Vision',
+      configured: false,
+      working: false,
+      details: `Test failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+    });
+    console.log(`   ❌ GPT-4 Vision: Test failed\n`);
+  }
+
+  // Test 3: TabScanner (fallback)
+  console.log('3. Testing TabScanner (fallback)...');
+  const tabscannerConfigured = process.env.TABSCANNER_API_KEY && process.env.TABSCANNER_ENDPOINT;
+  results.push({
+    component: 'TabScanner (fallback)',
+    configured: !!tabscannerConfigured,
+    working: !!tabscannerConfigured, // We assume it works if configured
+    details: tabscannerConfigured ?
+      'Configured and available as fallback' :
+      'Not configured - missing TABSCANNER_API_KEY or TABSCANNER_ENDPOINT'
+  });
+
+  console.log(`   ${tabscannerConfigured ? '✅' : '❌'} TabScanner: ${results[results.length - 1].details}\n`);
+
+  // Analyze results and provide recommendations
+  const googleVisionResult = results.find(r => r.component === 'Google Vision OCR');
+  const gptVisionResult = results.find(r => r.component === 'GPT-4 Vision');
+  const tabscannerResult = results.find(r => r.component === 'TabScanner (fallback)');
+
+  let recommendation = '';
+  let success = false;
+
+  if (googleVisionResult?.working && gptVisionResult?.working) {
+    success = true;
+    recommendation = '🎉 Perfect! Both Google Vision and GPT-4 Vision are working. You have the most advanced receipt processing available:\n' +
+                    '   • Google Vision OCR for initial text extraction\n' +
+                    '   • GPT-4 Vision for visual analysis and catching missed items\n' +
+                    '   • Intelligent reconciliation system\n' +
+                    '   • Enhanced Bulgarian product recognition\n' +
+                    '   This setup will catch the maximum number of items and provide the highest accuracy.';
+  } else if (googleVisionResult?.working) {
+    success = true;
+    recommendation = '✅ Good! Google Vision is working. You have enhanced Bulgarian receipt processing with:\n' +
+                    '   • Advanced OCR with image preprocessing\n' +
+                    '   • Bulgarian product recognition\n' +
+                    '   • Quality scoring and validation\n' +
+                    '   To unlock maximum accuracy, consider adding GPT-4 Vision by setting OPENAI_API_KEY.';
+  } else if (tabscannerResult?.working) {
+    success = true;
+    recommendation = '⚠️  Basic functionality available through TabScanner fallback.\n' +
+                    '   For better Bulgarian receipt processing, configure Google Vision:\n' +
+                    '   • Set GOOGLE_CLOUD_PROJECT_ID and GOOGLE_CLOUD_API_KEY, or\n' +
+                    '   • Set GOOGLE_APPLICATION_CREDENTIALS for service account\n' +
+                    '   For maximum accuracy, also add OPENAI_API_KEY for GPT-4 Vision.';
+  } else {
+    success = false;
+    recommendation = '❌ No OCR services are configured! Please configure at least one:\n' +
+                    '   1. Google Vision (recommended): Set GOOGLE_CLOUD_PROJECT_ID + GOOGLE_CLOUD_API_KEY\n' +
+                    '   2. TabScanner (basic): Set TABSCANNER_API_KEY + TABSCANNER_ENDPOINT\n' +
+                    '   3. GPT-4 Vision (premium): Set OPENAI_API_KEY\n' +
+                    '   For best results, configure both Google Vision and GPT-4 Vision.';
+  }
+
+  // Summary
+  console.log('📊 Test Summary:');
+  console.log('═'.repeat(50));
+  results.forEach(result => {
+    const status = result.working ? '✅ WORKING' : result.configured ? '⚠️  CONFIGURED' : '❌ MISSING';
+    console.log(`${result.component}: ${status}`);
+    if (result.details) {
+      console.log(`   ${result.details}`);
+    }
+  });
+
+  console.log('\n🎯 Recommendation:');
+  console.log(recommendation);
+
+  return {
+    success,
+    results,
+    recommendation
+  };
+}
+
+/**
+ * Quick health check for production
+ */
+export function quickHealthCheck(): {
+  status: 'optimal' | 'good' | 'basic' | 'failed';
+  message: string;
+  availableServices: string[];
+} {
+  const availableServices: string[] = [];
+
+  const hasGoogleVision = !!(process.env.GOOGLE_CLOUD_PROJECT_ID ||
+                            process.env.GOOGLE_CLOUD_API_KEY ||
+                            process.env.GOOGLE_APPLICATION_CREDENTIALS);
+  const hasGPTVision = !!process.env.OPENAI_API_KEY;
+  const hasTabScanner = !!(process.env.TABSCANNER_API_KEY && process.env.TABSCANNER_ENDPOINT);
+
+  if (hasGoogleVision) availableServices.push('Google Vision OCR');
+  if (hasGPTVision) availableServices.push('GPT-4 Vision');
+  if (hasTabScanner) availableServices.push('TabScanner');
+
+  let status: 'optimal' | 'good' | 'basic' | 'failed';
+  let message: string;
+
+  if (hasGoogleVision && hasGPTVision) {
+    status = 'optimal';
+    message = 'Dual OCR system ready - maximum accuracy available';
+  } else if (hasGoogleVision) {
+    status = 'good';
+    message = 'Enhanced Google Vision OCR ready';
+  } else if (hasTabScanner) {
+    status = 'basic';
+    message = 'Basic TabScanner OCR available';
+  } else {
+    status = 'failed';
+    message = 'No OCR services configured';
+  }
+
+  return {
+    status,
+    message,
+    availableServices
+  };
+}
+
+// CLI test runner
+if (require.main === module) {
+  testEnhancedOCRSystem().then(result => {
+    console.log('\n' + '='.repeat(60));
+    console.log(`Overall Status: ${result.success ? '✅ READY' : '❌ NEEDS CONFIGURATION'}`);
+    process.exit(result.success ? 0 : 1);
+  }).catch(error => {
+    console.error('Test runner failed:', error);
+    process.exit(1);
+  });
+}

@@ -22,8 +22,8 @@ CREATE TABLE public.receipts (
     store_location TEXT, -- "София, бул. Витоша 123"
     store_address JSONB, -- Структурирани данни за адрес
 
-    -- OCR данни от TabScanner
-    tabscanner_raw JSONB, -- Пълен отговор от TabScanner API
+    -- OCR данни
+    ocr_raw JSONB, -- Пълен отговор от OCR API
     ocr_confidence DECIMAL(3,2), -- 0.00-1.00 ниво на увереност
     processing_status VARCHAR(20) DEFAULT 'pending' CHECK (
         processing_status IN ('pending', 'processing', 'completed', 'failed', 'manual')
@@ -306,7 +306,7 @@ ALTER TABLE public.items
 -- ========================================
 
 COMMENT ON TABLE public.receipts IS 'Касови бележки с OCR данни и метаданни';
-COMMENT ON COLUMN public.receipts.tabscanner_raw IS 'Пълен JSON отговор от TabScanner API';
+COMMENT ON COLUMN public.receipts.ocr_raw IS 'Пълен JSON отговор от OCR API';
 COMMENT ON COLUMN public.receipts.processing_status IS 'Статус на обработката: pending, processing, completed, failed, manual';
 COMMENT ON COLUMN public.receipts.manual_entry IS 'Ръчно въведена касова бележка (без OCR)';
 

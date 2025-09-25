@@ -33,9 +33,6 @@ export enum ErrorCode {
   INVALID_FILE_TYPE = 'INVALID_FILE_TYPE',
   UPLOAD_FAILED = 'UPLOAD_FAILED',
 
-  // External Services
-  TABSCANNER_ERROR = 'TABSCANNER_ERROR',
-  TABSCANNER_QUOTA_EXCEEDED = 'TABSCANNER_QUOTA_EXCEEDED',
   EXTERNAL_SERVICE_ERROR = 'EXTERNAL_SERVICE_ERROR',
 
   // Rate Limiting
@@ -140,9 +137,6 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   [ErrorCode.INVALID_FILE_TYPE]: 'Невалиден тип файл',
   [ErrorCode.UPLOAD_FAILED]: 'Качването на файла е неуспешно',
 
-  // External Services
-  [ErrorCode.TABSCANNER_ERROR]: 'Грешка при обработка на изображението',
-  [ErrorCode.TABSCANNER_QUOTA_EXCEEDED]: 'Достигнат е лимитът за обработка',
   [ErrorCode.EXTERNAL_SERVICE_ERROR]: 'Грешка във външна услуга',
 
   // Rate Limiting

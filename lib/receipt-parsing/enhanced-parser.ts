@@ -19,11 +19,11 @@ import { recognizeBulgarianProduct, categorizeBulgarianProduct, validateBulgaria
 export class EnhancedReceiptParser {
   private context: ProcessingContext;
 
-  constructor(context: ProcessingContext = { debugMode: false }) {
+  constructor(context: ProcessingContext = { debugMode: true }) {
     this.context = context;
   }
 
-  async parseReceipt(rawText: string, processingEngine: 'google_vision' | 'tabscanner' | 'mock'): Promise<ReceiptExtraction> {
+  async parseReceipt(rawText: string, processingEngine: 'google_vision' | 'gpt_vision' | 'mock'): Promise<ReceiptExtraction> {
     const startTime = Date.now();
 
     if (this.context.debugMode) {
@@ -141,42 +141,191 @@ export class EnhancedReceiptParser {
   }
 
   private extractItems(text: string, storeFormat: any): ExtractedItem[] {
+    // NEW SIMPLE APPROACH: Extract everything first, filter intelligently later
+    const allPossibleItems = this.extractAllPossibleItems(text, storeFormat);
+
+    if (this.context.debugMode) {
+      console.log(`📦 Found ${allPossibleItems.length} potential items before filtering`);
+    }
+
+    // Use intelligent classification to filter out non-products
+    const realProducts = this.classifyAndFilterProducts(allPossibleItems);
+
+    if (this.context.debugMode) {
+      console.log(`✅ After filtering: ${realProducts.length} real products`);
+    }
+
+    return this.postProcessItems(realProducts);
+  }
+
+  private extractAllPossibleItems(text: string, storeFormat: any): ExtractedItem[] {
     const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     const items: ExtractedItem[] = [];
 
-    // Skip header and footer lines
-    const startIndex = this.findItemSectionStart(lines, storeFormat);
-    const endIndex = this.findItemSectionEnd(lines, storeFormat);
+    // Find the product section (between header and footer)
+    const startIndex = Math.max(0, this.findItemSectionStart(lines, storeFormat));
+    const endIndex = Math.min(lines.length, this.findItemSectionEnd(lines, storeFormat));
     const itemLines = lines.slice(startIndex, endIndex);
 
-    if (this.context.debugMode) {
-      console.log(`📦 Processing ${itemLines.length} potential item lines (${startIndex}-${endIndex})`);
-    }
-
+    // Try to extract multi-line items first (for Lidl format)
     let i = 0;
     while (i < itemLines.length) {
-      const line = itemLines[i];
-      const lineNumber = startIndex + i;
-
-      // Skip lines that are clearly not items
-      if (this.shouldSkipLine(line)) {
+      // Skip obvious non-item lines (very minimal filtering)
+      if (this.isObviouslyNotAnItem(itemLines[i])) {
         i++;
         continue;
       }
 
-      const extractedItem = this.extractItemFromLine(line, lineNumber, itemLines, i, storeFormat);
-      if (extractedItem) {
-        items.push(extractedItem);
-
-        // If this was a multi-line item, skip the next line to avoid double processing
-        if (this.wasMultiLineItem(extractedItem, itemLines, i)) {
-          i++; // Skip the next line since it was part of this item
-        }
+      // Try multi-line extraction
+      const multiLineItem = this.tryExtractMultiLineItem(itemLines, i, startIndex, storeFormat);
+      if (multiLineItem) {
+        items.push(multiLineItem.item);
+        i += multiLineItem.linesConsumed;
+        continue;
       }
+
+      // Try single line extraction with looser criteria
+      const singleItem = this.tryExtractSingleItem(itemLines[i], itemLines, i, startIndex, storeFormat);
+      if (singleItem) {
+        items.push(singleItem);
+      }
+
       i++;
     }
 
-    return this.postProcessItems(items);
+    return items;
+  }
+
+  private tryExtractSingleItem(line: string, allLines: string[], index: number, globalStart: number, storeFormat: any): ExtractedItem | null {
+    // Look for product names that might have prices nearby
+    const trimmed = line.trim();
+
+    // Skip very short or empty lines
+    if (trimmed.length < 2) return null;
+
+    // Skip lines that are obviously prices or codes
+    if (/^\d+[.,]\d{2}\s*[A-Z]?\s*$/.test(trimmed)) return null;
+    if (/^\d+\s*[A-Z]?\s*$/.test(trimmed) && trimmed.length < 6) return null;
+
+    // Try to find a price for this potential product name
+    let price = 0;
+    let quantity = 1;
+    let priceSource = '';
+
+    // Look in current line first
+    const samePriceMatch = trimmed.match(/^(.+?)\s+(\d+[.,]\d{2})\s*(?:лв|BGN|[A-Z])?\s*$/);
+    if (samePriceMatch) {
+      const productName = samePriceMatch[1].trim();
+      const priceStr = samePriceMatch[2];
+
+      if (productName.length >= 3) {
+        price = parseNumberWithFormat(priceStr, storeFormat?.numberFormat);
+        priceSource = 'same_line';
+      }
+    }
+
+    // Look in next lines for price if not found
+    if (price === 0 && index < allLines.length - 2) {
+      for (let j = 1; j <= 2; j++) {
+        const nextLine = allLines[index + j]?.trim();
+        if (!nextLine) continue;
+
+        // Check for price patterns
+        const priceMatch = nextLine.match(/^(\d+[.,]\d{2})\s*[A-Z]?\s*$/);
+        if (priceMatch) {
+          price = parseNumberWithFormat(priceMatch[1], storeFormat?.numberFormat);
+          priceSource = `next_line_${j}`;
+          break;
+        }
+
+        // Check for quantity x price patterns
+        const qtyPriceMatch = nextLine.match(/^(\d+\.?\d*)\s*[x×]\s*(\d+[.,]\d{2})\s*$/i);
+        if (qtyPriceMatch) {
+          quantity = parseFloat(qtyPriceMatch[1]) || 1;
+          const unitPrice = parseNumberWithFormat(qtyPriceMatch[2], storeFormat?.numberFormat);
+          price = unitPrice;
+          priceSource = `qty_price_line_${j}`;
+          break;
+        }
+      }
+    }
+
+    // If we found a price and the name seems reasonable, create item
+    if (price > 0 && trimmed.length >= 2) {
+      return this.createExtractedItem(
+        trimmed,
+        `${line}${priceSource ? ` [${priceSource}]` : ''}`,
+        price,
+        quantity,
+        globalStart + index
+      );
+    }
+
+    return null;
+  }
+
+  private tryExtractMultiLineItem(lines: string[], startIndex: number, globalStartIndex: number, storeFormat: any): { item: ExtractedItem, linesConsumed: number } | null {
+    // Try to match Lidl's multi-line format:
+    // Line 1: Product name (e.g., "СЛАДОЛЕД МИНИ КЛАСИК")
+    // Line 2: Quantity x unit price (e.g., "2.000 x 7.49")
+    // Line 3: Total price with suffix (e.g., "14.98 G")
+
+    if (startIndex + 2 >= lines.length) {
+      return null;
+    }
+
+    const line1 = lines[startIndex].trim();
+    const line2 = lines[startIndex + 1].trim();
+    const line3 = lines[startIndex + 2].trim();
+
+    // Line 1 should be a product name (no obvious price patterns)
+    if (this.shouldSkipLine(line1) || /\d+[.,]\d{2}/.test(line1)) {
+      return null;
+    }
+
+    // Line 2 should have quantity x unit price pattern
+    const qtyPriceMatch = line2.match(/^(\d+\.?\d*)\s*[x×]\s*(\d+[.,]\d{2})\s*$/i);
+    if (!qtyPriceMatch) {
+      return null;
+    }
+
+    // Line 3 should have total price with letter suffix
+    const totalPriceMatch = line3.match(/^(\d+[.,]\d{2})\s*[A-Z]?\s*$/);
+    if (!totalPriceMatch) {
+      return null;
+    }
+
+    const productName = line1;
+    const quantity = parseFloat(qtyPriceMatch[1]) || 1;
+    const unitPrice = parseNumberWithFormat(qtyPriceMatch[2], storeFormat?.numberFormat);
+    const totalPrice = parseNumberWithFormat(totalPriceMatch[1], storeFormat?.numberFormat);
+
+    // Validate that quantity * unit price ≈ total price (within 5% tolerance)
+    const expectedTotal = quantity * unitPrice;
+    const priceDiff = Math.abs(expectedTotal - totalPrice);
+    const tolerance = expectedTotal * 0.05;
+
+    if (priceDiff > tolerance && priceDiff > 0.02) {
+      return null; // Price mismatch, not a valid multi-line item
+    }
+
+    // Validate that this is a real product name
+    if (!this.isValidProductName(productName)) {
+      return null;
+    }
+
+    const item = this.createExtractedItem(
+      productName,
+      `${line1}\n${line2}\n${line3}`,
+      unitPrice,
+      quantity,
+      globalStartIndex + startIndex
+    );
+
+    return {
+      item,
+      linesConsumed: 3 // We consumed 3 lines
+    };
   }
 
   private wasMultiLineItem(item: ExtractedItem, allLines: string[], currentIndex: number): boolean {
@@ -245,7 +394,7 @@ export class EnhancedReceiptParser {
           }
         }
 
-        if (name.length >= 3 && price > 0) {
+        if (name.length >= 3 && price > 0 && this.isValidProductName(name)) {
           return this.createExtractedItem(name, line, price, 1, lineNumber);
         }
       }
@@ -297,8 +446,8 @@ export class EnhancedReceiptParser {
     });
     const quantity = parseFloat(quantityStr.replace(',', '.')) || 1;
 
-    // Only create item if we have both name and price
-    if (name.length >= 3 && price > 0) {
+    // Only create item if we have both name and price AND it's a valid product
+    if (name.length >= 3 && price > 0 && this.isValidProductName(name)) {
       return this.createExtractedItem(name, originalText, price, quantity, lineNumber, barcode);
     }
 
@@ -616,8 +765,13 @@ export class EnhancedReceiptParser {
   // Helper methods
   private shouldSkipLine(line: string): boolean {
     const skipPatterns = [
+      // Separators and formatting
       /^={2,}$/,
       /^-{2,}$/,
+      /^\s*\*{2,}\s*$/,
+      /^\s*#{2,}\s*$/,
+
+      // Header/footer content
       /КАСОВА\s*БЕЛЕЖКА/i,
       /БЛАГОДАРИМ/i,
       /VISIT|WWW/i,
@@ -625,10 +779,106 @@ export class EnhancedReceiptParser {
       /КАСИЕР|№|НОМЕР|ЕИК|ЗДДС|УНП/i,
       /^ул\.|^гр\.|ЕООД|ООД/i,
       /^\s*\d{1,2}:\d{2}\s*$/,
-      /^\s*\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}\s*$/
+      /^\s*\d{1,2}[.\/-]\d{1,2}[.\/-]\d{2,4}\s*$/,
+
+      // Payment and total related lines - ENHANCED
+      /МЕЖДИННА\s*СУМА/i,
+      /ОБЩА\s*СУМА/i,
+      /TOTAL|СУМА/i,
+      /КРЕДИТНА?\s*КАРТА/i,
+      /ДЕБИТНА?\s*КАРТА/i,
+      /КАРТА|CARD/i,
+      /ПЛАЩАНЕ|PAYMENT/i,
+      /КРЕДИТ\s*\/?\s*ДЕБИТ/i,
+      /ДЕБИТ\s*\/?\s*КРЕДИТ/i,
+      /КРЕДИТ\s*ПЛАЩАНЕ/i,
+      /ДЕБИТ\s*ПЛАЩАНЕ/i,
+      /БАНКА|BANK/i,
+      /ЕВРО|EURO/i,
+      /КУРС|RATE|EXCHANGE/i,
+      /ОБМЕНЕН/i,
+      /CHANGE|РЕСТО/i,
+      /ПОЛУЧЕНО|RECEIVED/i,
+      /ДЪЛЖИМО|DUE/i,
+      /ЧЕКА|CHECK/i,
+      /ПАРИЧНИ\s*СРЕДСТВА/i,
+      /НАЛИЧНОСТ|CASH/i,
+      /БАНКНОТА|БАНКНОТИ/i,
+
+      // Store/receipt identifiers
+      /TID:|VAT:|TAX/i,
+      /RECEIPT|БОН/i,
+      /ОТЧЕТ|REPORT/i,
+      /ТРАНЗАКЦИЯ|TRANSACTION/i,
+      /TERMINAL|ТЕРМИНАЛ/i,
+      /POS/i,
+      /REF\s*NO|REFERENCE/i,
+
+      // Operator/system info
+      /ОПЕРАТОР|OPERATOR/i,
+      /КАСА|КАСИЕР/i,
+      /СИСТЕМА|SYSTEM/i,
+
+      // Empty or very short lines
+      /^\s*[A-Z]\s*$/,  // Single letters like "B", "G", etc.
+      /^\s*\d{1,3}\s*$/,  // Just numbers without context
+      /^\s*[A-Z]{1,2}\s*\d{0,3}\s*$/,  // Letter combinations with numbers
+
+      // Lines that are just codes or reference numbers
+      /^\s*\d{4,}\s*$/,  // Long numbers (receipt numbers)
+      /^\s*[A-Z0-9]{5,}\s*$/,  // Code patterns
+
+      // Date/time patterns
+      /\d{2}\/\d{2}\/\d{2,4}/,
+      /\d{2}\.\d{2}\.\d{2,4}/,
+      /\d{2}-\d{2}-\d{2,4}/,
+
+      // Lines with just prices (no product names)
+      /^\s*\d+[.,]\d{2}\s*(?:лв|BGN)?\s*$/,
+
+      // Store address/contact info
+      /тел\.|phone|факс|fax/i,
+      /email|mail|www\./i,
+      /софия|варна|пловдив|бургас/i,  // Major Bulgarian cities in addresses
+
+      // Additional payment method patterns
+      /CONTACTLESS|БЕЗКОНТАКТНО/i,
+      /CHIP\s*&\s*PIN/i,
+      /МАГНИТНА\s*ЛЕНТА/i,
+      /EMV/i,
+      /VISA|MASTERCARD|MAESTRO/i,
+      /APPROVED|ОДОБРЕНО/i,
+      /DECLINED|ОТХВЪРЛЕНО/i,
+
+      // Receipt completion indicators
+      /КРАЙ\s*НА\s*КАСОВ/i,
+      /END\s*OF\s*RECEIPT/i,
+      /ЗАПАЗЕТЕ\s*БЕЛЕЖКАТА/i,
+      /KEEP\s*RECEIPT/i
     ];
 
-    return skipPatterns.some(pattern => pattern.test(line)) || line.length < 3;
+    // Check if line is too short to be a meaningful product
+    if (line.length < 3) {
+      return true;
+    }
+
+    // Check if line matches any skip pattern
+    if (skipPatterns.some(pattern => pattern.test(line))) {
+      return true;
+    }
+
+    // Additional logic: Skip lines that are mostly numbers/codes
+    const cleanLine = line.trim();
+    if (/^\d+[A-Z]*\d*$/.test(cleanLine) && cleanLine.length < 8) {
+      return true;
+    }
+
+    // Skip lines that are just currency amounts without product context
+    if (/^\s*\d+[.,]\d{2}\s*[A-Z]?\s*$/.test(cleanLine)) {
+      return true;
+    }
+
+    return false;
   }
 
   private findItemSectionStart(lines: string[], storeFormat: any): number {
@@ -706,10 +956,183 @@ export class EnhancedReceiptParser {
     return errorIndicators.some(pattern => pattern.test(text));
   }
 
+  private isObviouslyNotAnItem(line: string): boolean {
+    const trimmed = line.trim().toLowerCase();
+
+    // Only skip the most obvious non-items
+    if (trimmed.length === 0) return true;
+
+    // Skip separators
+    if (/^[=\-*#]{3,}$/.test(trimmed)) return true;
+
+    // Skip timestamps
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) return true;
+
+    // Skip dates
+    if (/^\d{1,2}[.\/\-]\d{1,2}[.\/\-]\d{2,4}$/.test(trimmed)) return true;
+
+    return false;
+  }
+
+  private classifyAndFilterProducts(items: ExtractedItem[]): ExtractedItem[] {
+    // Simple but effective classification
+    return items.filter(item => this.isLikelyProduct(item));
+  }
+
+  private isLikelyProduct(item: ExtractedItem): boolean {
+    const name = item.name.toLowerCase().trim();
+
+    // Explicit non-products (exact matches)
+    const nonProducts = [
+      'обща сума лев',
+      'обща сума в евро',
+      'междинна сума',
+      'кредитна/дебитна карта',
+      'total',
+      'subtotal',
+      'сума',
+      'банка дск',
+      'банка',
+      'получено',
+      'ресто',
+      'change',
+      'курс',
+      'rate'
+    ];
+
+    for (const nonProduct of nonProducts) {
+      if (name === nonProduct || name.includes(nonProduct)) {
+        return false;
+      }
+    }
+
+    // Price-only lines (like "14.98 G")
+    if (/^\d+[.,]\d{2}\s*[a-z]?\s*$/i.test(name)) {
+      return false;
+    }
+
+    // Single letters or very short codes
+    if (/^[a-z]{1,2}\d*$/i.test(name) && name.length < 4) {
+      return false;
+    }
+
+    // Pure numbers
+    if (/^\d+$/.test(name)) {
+      return false;
+    }
+
+    // Must have a reasonable price
+    if (item.price <= 0 || item.price > 1000) {
+      return false;
+    }
+
+    // Must have reasonable name length
+    if (name.length < 2) {
+      return false;
+    }
+
+    // Everything else is likely a product
+    return true;
+  }
+
+  private isValidProductName(name: string): boolean {
+    const cleanName = name.trim().toLowerCase();
+
+    // Skip if too short
+    if (cleanName.length < 2) {
+      return false;
+    }
+
+    // Skip obvious non-product patterns (more specific now)
+    const nonProductPatterns = [
+      // Payment methods and financial terms - more specific
+      /кредитна?\s*\/?\s*дебитна?\s*карта/i,
+      /payment|кредит\s*\/?\s*дебит\s*плащане/i,
+      /^(visa|mastercard|maestro)$/i,
+      /^(contactless|безконтактно)$/i,
+      /^(cash|наличност)$/i,
+
+      // Totals and sums - exact matches
+      /^(общо|обща)\s*сума/i,
+      /^(междинна)\s*сума/i,
+      /^(total|сума)$/i,
+      /^subtotal$/i,
+
+      // Store operations - exact matches
+      /^(касиер|каса|operator|оператор)$/i,
+      /^(receipt|бон|касова\s*бележка)$/i,
+      /^(транзакция|transaction)$/i,
+
+      // System codes and IDs - exact patterns
+      /^[a-z]{1,2}\d+$/i,  // Short codes like "a12", "bc34"
+      /^\d+[a-z]?$/i,      // Numbers with optional letter suffix, but not product codes
+
+      // Time and date related
+      /^(време|time|дата|date)$/i,
+      /^\d{1,2}:\d{2}$/,   // Time format
+      /^\d{1,2}[./-]\d{1,2}[./-]\d{2,4}$/,  // Date format
+
+      // Administrative - exact matches
+      /^(данък|tax|зддс|vat)$/i,
+      /^(благодарим|thanks|спасибо)$/i,
+      /^(довиждане|goodbye)$/i,
+
+      // Pure numbers or currency amounts
+      /^\d+$/,             // Just numbers
+      /^\d+[.,]\d{2}\s*(?:лв|bgn|б)?$/i, // Pure price lines
+
+      // Very short meaningless text
+      /^[a-zа-я]{1}$/i,    // Single letters only
+    ];
+
+    // Check against non-product patterns
+    if (nonProductPatterns.some(pattern => pattern.test(cleanName))) {
+      return false;
+    }
+
+    // Must contain at least one letter (not just numbers and symbols)
+    if (!/[a-zа-я]/i.test(cleanName)) {
+      return false;
+    }
+
+    // Allow products with numbers (like "KINDER COUNTRY", "BL. ANGUS", etc.)
+    // Only reject if it's ALL numbers or mostly numbers with no meaningful text
+    const digitCount = (cleanName.match(/\d/g) || []).length;
+    const letterCount = (cleanName.match(/[a-zа-я]/gi) || []).length;
+
+    // Only reject if it's more than 80% digits AND has less than 3 letters
+    if (digitCount > 0 && letterCount < 3 && digitCount > letterCount * 4) {
+      return false;
+    }
+
+    return true;
+  }
+
   private postProcessItems(items: ExtractedItem[]): ExtractedItem[] {
+    // Additional filtering: remove items that slipped through initial validation
+    const validItems = items.filter(item => {
+      // Double-check with more strict validation
+      if (!this.isValidProductName(item.name)) {
+        return false;
+      }
+
+      // Remove items with suspicious prices (too low or too high for typical products)
+      if (item.price < 0.01 || item.price > 10000) {
+        return false;
+      }
+
+      // Remove items where name is just repeating characters
+      const normalized = item.normalizedName;
+      if (/^(.)\1+$/.test(normalized) || normalized.length < 2) {
+        return false;
+      }
+
+      return true;
+    });
+
     // Remove duplicates based on normalized name and price
     const seen = new Set<string>();
-    const uniqueItems = items.filter(item => {
+    const uniqueItems = validItems.filter(item => {
       const key = `${item.normalizedName}_${item.price}`;
       if (seen.has(key)) {
         return false;

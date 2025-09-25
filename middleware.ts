@@ -229,7 +229,7 @@ export async function middleware(request: NextRequest) {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: https:",
       "font-src 'self' data: https://fonts.gstatic.com",
-      "connect-src 'self' https://eisfwocfkejsxipmbyzp.supabase.co https://api.tabscanner.com",
+      "connect-src 'self' https://eisfwocfkejsxipmbyzp.supabase.co https://api.openai.com",
       "frame-ancestors 'none'"
     ].join('; ');
 

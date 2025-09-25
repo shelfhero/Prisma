@@ -32,7 +32,7 @@ export interface ExtractedItem {
 }
 
 export interface ExtractionMetadata {
-  processingEngine: 'google_vision' | 'tabscanner' | 'mock';
+  processingEngine: 'google_vision' | 'gpt_vision' | 'mock';
   processingTime: number;
   detectedStore: StoreFormat | null;
   language: 'bg' | 'en' | 'mixed';

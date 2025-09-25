@@ -1,17 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
 const Navigation = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const pathname = usePathname();
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading } = useAuth();
+
+  // Ensure hydration consistency
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Don't show navigation on auth pages
   if (pathname?.startsWith('/auth')) {
+    return null;
+  }
+
+  // Prevent hydration issues by not rendering until client-side
+  if (!isClient) {
     return null;
   }
 
@@ -102,7 +113,9 @@ const Navigation = () => {
 
           {/* User menu */}
           <div className="hidden md:flex items-center space-x-4">
-            {user ? (
+            {loading ? (
+              <div className="w-20 h-8 bg-gray-200 rounded-md animate-pulse"></div>
+            ) : user ? (
               <div className="flex items-center space-x-4">
                 <span className="text-sm text-gray-700">
                   {user.email}
@@ -165,7 +178,11 @@ const Navigation = () => {
               </Link>
             ))}
 
-            {user ? (
+            {loading ? (
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                <div className="h-12 bg-gray-200 rounded-md animate-pulse mx-3"></div>
+              </div>
+            ) : user ? (
               <div className="border-t border-gray-200 pt-4 mt-4">
                 <div className="flex items-center px-3 py-2">
                   <span className="text-sm text-gray-700">{user.email}</span>

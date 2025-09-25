@@ -18,7 +18,11 @@
       "Bash(npx supabase:*)",
       "Bash(taskkill:*)",
       "Bash(curl:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(if exist .next rmdir /s /q .next)",
+      "Bash(cmd /c:*)"
     ],
     "deny": [],
     "ask": []

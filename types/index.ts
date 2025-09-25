@@ -253,48 +253,6 @@ export interface SearchParams extends SearchFilters {
   sort?: SortOptions;
 }
 
-// ============================================================================
-// TABSCANNER INTEGRATION TYPES
-// ============================================================================
-
-export interface TabScannerRequest {
-  apiKey: string;
-  images: File[];
-  language?: string;
-  currency?: string;
-  returnRawText?: boolean;
-}
-
-export interface TabScannerResponse {
-  success: boolean;
-  receipt?: TabScannerReceipt;
-  rawText?: string;
-  confidence?: number;
-  processingTime?: number;
-  error?: string;
-}
-
-export interface TabScannerReceipt {
-  retailer?: string;
-  total?: number;
-  tax?: number;
-  date?: string;
-  currency?: string;
-  location?: string;
-  receiptNumber?: string;
-  items?: TabScannerItem[];
-  paymentMethod?: string;
-}
-
-export interface TabScannerItem {
-  name: string;
-  price: number;
-  quantity?: number;
-  unit?: string;
-  barcode?: string;
-  category?: string;
-  discount?: number;
-}
 
 // ============================================================================
 // FORM VALIDATION TYPES
@@ -316,7 +274,6 @@ export interface FormState<T = any> {
 
 export interface ReceiptFormState extends FormState<ReceiptFormData> {
   images: File[];
-  tabScannerResult?: TabScannerResponse;
   processingStatus: 'idle' | 'scanning' | 'processing' | 'completed' | 'error';
 }
 

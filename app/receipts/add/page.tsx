@@ -79,7 +79,7 @@ function AddReceiptContent() {
         throw new Error(result.error || 'Грешка при качване');
       }
 
-      const { total_amount, retailer, confidence, processing_status } = result.data;
+      const { total_amount, retailer, confidence, processing_status, receipt_id } = result.data;
 
       let message = `Касовата бележка е обработена успешно! Обща сума: ${total_amount} лв.`;
 
@@ -90,10 +90,11 @@ function AddReceiptContent() {
       setSuccess(message);
       setSelectedFiles([]);
 
-      // Redirect to dashboard after 3 seconds
+      // Redirect to verification page immediately with any receipt ID
       setTimeout(() => {
-        router.push('/dashboard');
-      }, 3000);
+        const mockReceiptId = receipt_id || Date.now().toString();
+        router.push(`/verify-receipt/${mockReceiptId}`);
+      }, 1500);
 
     } catch (err) {
       console.error('Upload error:', err);
@@ -227,7 +228,7 @@ function AddReceiptContent() {
             <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
               <p className="text-sm text-green-800">{success}</p>
               <p className="text-xs text-green-600 mt-1">
-                Пренасочване към таблото...
+                Пренасочване към проверка на данните...
               </p>
             </div>
           )}

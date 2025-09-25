@@ -24,11 +24,6 @@ export const config = {
     serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
   },
 
-  // TabScanner
-  tabscanner: {
-    endpoint: process.env.TABSCANNER_ENDPOINT!,
-    apiKey: process.env.TABSCANNER_API_KEY!,
-  },
 
   // File uploads
   upload: {
@@ -292,8 +287,6 @@ export const ERROR_CODES = {
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',
   INVALID_FILE_TYPE: 'INVALID_FILE_TYPE',
 
-  // External services
-  TABSCANNER_ERROR: 'TABSCANNER_ERROR',
 
   // System
   INTERNAL_ERROR: 'INTERNAL_ERROR',
@@ -316,8 +309,6 @@ export const FEATURE_FLAGS = {
   ENABLE_PRICE_TRACKING: true,
   ENABLE_SPENDING_REPORTS: true,
 
-  // External integrations
-  ENABLE_TABSCANNER: true,
   ENABLE_NOTIFICATIONS: true,
 
   // Admin features

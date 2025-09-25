@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     }
 
     const token = authHeader.substring(7);
-    const supabase = createServerClient();
+    const supabase = createServerClient(true); // Use service key for API routes
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {

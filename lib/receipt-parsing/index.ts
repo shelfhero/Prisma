@@ -44,13 +44,13 @@ export {
 // Utility functions for common operations
 export const ReceiptParsingUtils = {
   // Quick parse function for simple use cases
-  async quickParse(text: string, engine: 'google_vision' | 'tabscanner' | 'mock' = 'mock'): Promise<ReceiptExtraction> {
+  async quickParse(text: string, engine: 'google_vision' | 'gpt_vision' | 'mock' = 'mock'): Promise<ReceiptExtraction> {
     const parser = new EnhancedReceiptParser({ debugMode: false });
     return await parser.parseReceipt(text, engine);
   },
 
   // Parse with debug output
-  async debugParse(text: string, engine: 'google_vision' | 'tabscanner' | 'mock' = 'mock'): Promise<ReceiptExtraction> {
+  async debugParse(text: string, engine: 'google_vision' | 'gpt_vision' | 'mock' = 'mock'): Promise<ReceiptExtraction> {
     const parser = new EnhancedReceiptParser({ debugMode: true });
     return await parser.parseReceipt(text, engine);
   },

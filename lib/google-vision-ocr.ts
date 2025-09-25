@@ -3,9 +3,9 @@
  * Enhanced Bulgarian receipt text recognition and parsing
  */
 
-import { ImageAnnotatorClient } from '@google-cloud/vision';
 import { EnhancedReceiptParser } from './receipt-parsing/enhanced-parser';
 import { ReceiptExtraction } from './receipt-parsing/types';
+import { ReceiptImagePreprocessor, ReceiptValidator, PreprocessedImage } from './image-preprocessing';
 
 interface ReceiptData {
   retailer: string;
@@ -32,10 +32,21 @@ interface OCRResponse {
     suggestions: string[];
     processingTime: number;
   };
+  preprocessing?: {
+    attempts: number;
+    bestAttempt: string;
+    imageQualityIssues: string[];
+    validationResults?: {
+      isValid: boolean;
+      discrepancy: number;
+      confidence: 'high' | 'medium' | 'low';
+      needsManualReview: boolean;
+    };
+  };
 }
 
-// Initialize Google Cloud Vision client
-function createVisionClient() {
+// Initialize Google Cloud Vision client with dynamic import
+async function createVisionClient() {
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
   const apiKey = process.env.GOOGLE_CLOUD_API_KEY;
   const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
@@ -44,20 +55,28 @@ function createVisionClient() {
     throw new Error('Google Cloud Vision not configured');
   }
 
-  // Use API key if available, otherwise fall back to service account
-  const clientConfig: any = {};
+  try {
+    // Dynamic import to avoid Jest worker issues
+    const { ImageAnnotatorClient } = await import('@google-cloud/vision');
 
-  if (projectId) {
-    clientConfig.projectId = projectId;
+    // Use API key if available, otherwise fall back to service account
+    const clientConfig: any = {};
+
+    if (projectId) {
+      clientConfig.projectId = projectId;
+    }
+
+    // Only use API key if it's not a file path
+    if (apiKey && !apiKey.startsWith('.')) {
+      clientConfig.apiKey = apiKey;
+    }
+
+    // For service account authentication, the client will automatically use GOOGLE_APPLICATION_CREDENTIALS
+    return new ImageAnnotatorClient(clientConfig);
+  } catch (error) {
+    console.error('Failed to load Google Cloud Vision client:', error);
+    throw new Error('Failed to initialize Google Vision client - process limitations');
   }
-
-  // Only use API key if it's not a file path
-  if (apiKey && !apiKey.startsWith('.')) {
-    clientConfig.apiKey = apiKey;
-  }
-
-  // For service account authentication, the client will automatically use GOOGLE_APPLICATION_CREDENTIALS
-  return new ImageAnnotatorClient(clientConfig);
 }
 
 // Legacy parser - kept for backward compatibility
@@ -292,8 +311,10 @@ function parseReceiptText(text: string): ReceiptData {
   };
 }
 
-// Main OCR function with enhanced parsing
+// Main OCR function with enhanced preprocessing and multiple attempts
 export async function processReceiptWithGoogleVision(imageBuffer: Buffer, debugMode = false): Promise<OCRResponse> {
+  const startTime = Date.now();
+
   try {
     // Check if Google Cloud Vision is configured
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
@@ -304,38 +325,132 @@ export async function processReceiptWithGoogleVision(imageBuffer: Buffer, debugM
       throw new Error('Google Cloud Vision not configured');
     }
 
-    const client = createVisionClient();
-
-    // Perform text detection
-    const [result] = await client.textDetection({
-      image: { content: imageBuffer }
-    });
-
-    const detections = result.textAnnotations;
-    if (!detections || detections.length === 0) {
-      throw new Error('No text detected in image');
-    }
-
-    // Get full text
-    const fullText = detections[0].description || '';
+    const client = await createVisionClient();
 
     if (debugMode) {
-      console.log('🔍 Raw OCR text detected:');
-      console.log('='.repeat(50));
-      console.log(fullText);
-      console.log('='.repeat(50));
+      console.log('🖼️ Starting image preprocessing and OCR analysis...');
     }
 
-    // Use enhanced parser
-    const parser = new EnhancedReceiptParser({ debugMode });
-    const extraction = await parser.parseReceipt(fullText, 'google_vision');
+    // Step 1: Analyze image quality and generate preprocessing options
+    const qualityAnalysis = await ReceiptImagePreprocessor.analyzeImageQuality(imageBuffer);
+
+    if (debugMode) {
+      console.log('📊 Image quality analysis:');
+      console.log(`  Issues detected: ${qualityAnalysis.issues.join(', ')}`);
+      console.log(`  Needs enhancement: ${qualityAnalysis.needsEnhancement}`);
+    }
+
+    // Step 2: Generate multiple preprocessed versions
+    const preprocessedImages = await ReceiptImagePreprocessor.preprocessReceipt(
+      imageBuffer,
+      qualityAnalysis.suggestedOptions
+    );
+
+    if (debugMode) {
+      console.log(`🔄 Generated ${preprocessedImages.length} image variants for processing`);
+    }
+
+    // Step 3: Process each variant and collect results
+    const ocrResults: Array<{
+      extraction: ReceiptExtraction;
+      confidence: number;
+      rawText: string;
+      variant: string;
+    }> = [];
+
+    for (let i = 0; i < preprocessedImages.length; i++) {
+      const variant = preprocessedImages[i];
+
+      try {
+        if (debugMode) {
+          console.log(`📸 Processing variant ${i + 1}/${preprocessedImages.length}: [${variant.metadata.preprocessing.join(', ')}]`);
+        }
+
+        // Perform OCR on this variant
+        const [result] = await client.textDetection({
+          image: { content: variant.buffer }
+        });
+
+        const detections = result.textAnnotations;
+        if (detections && detections.length > 0) {
+          const fullText = detections[0].description || '';
+
+          // Parse with enhanced parser
+          const parser = new EnhancedReceiptParser({ debugMode: false }); // Suppress debug for variants
+          const extraction = await parser.parseReceipt(fullText, 'google_vision');
+
+          // Calculate Google Vision confidence
+          const googleConfidence = result.fullTextAnnotation?.pages?.[0]?.confidence || 0.8;
+
+          ocrResults.push({
+            extraction,
+            confidence: extraction.confidence * googleConfidence,
+            rawText: fullText,
+            variant: variant.metadata.preprocessing.join(', ')
+          });
+
+          if (debugMode) {
+            console.log(`  ✓ Variant ${i + 1}: ${extraction.items.length} items, ${Math.round(extraction.confidence * 100)}% confidence`);
+          }
+        }
+      } catch (variantError) {
+        if (debugMode) {
+          console.log(`  ✗ Variant ${i + 1} failed: ${variantError instanceof Error ? variantError.message : 'Unknown error'}`);
+        }
+      }
+    }
+
+    if (ocrResults.length === 0) {
+      throw new Error('No text detected in any image variant');
+    }
+
+    // Step 4: Select best result based on confidence and validation
+    let bestResult = ocrResults[0];
+    let bestValidation: ReturnType<typeof ReceiptValidator.validateReceiptMath> | undefined;
+
+    for (const result of ocrResults) {
+      // Validate math for this result
+      const validation = ReceiptValidator.validateReceiptMath(
+        result.extraction.items.map(item => ({ price: item.price, quantity: item.quantity })),
+        result.extraction.total
+      );
+
+      // Calculate combined score
+      let score = result.confidence;
+      if (validation.isValid) score += 0.2;
+      if (validation.confidence === 'high') score += 0.1;
+      if (validation.confidence === 'medium') score += 0.05;
+
+      // Prefer results with more items (up to a point)
+      const itemBonus = Math.min(result.extraction.items.length * 0.02, 0.1);
+      score += itemBonus;
+
+      if (score > bestResult.confidence || !bestValidation || validation.confidence === 'high') {
+        bestResult = result;
+        bestValidation = validation;
+      }
+    }
+
+    // Step 5: Calculate overall confidence
+    const textQuality = {
+      hasAllPrices: bestResult.extraction.items.every(item => item.price > 0),
+      hasValidItems: bestResult.extraction.items.length > 0 &&
+                     bestResult.extraction.items.every(item => item.name.length > 1)
+    };
+
+    const confidenceAnalysis = ReceiptValidator.calculateOCRConfidence(
+      bestResult.confidence * 100,
+      bestValidation!,
+      bestResult.extraction.items.length,
+      textQuality
+    );
 
     // Convert to legacy format for compatibility
     const receiptData: ReceiptData = {
-      retailer: extraction.retailer,
-      total: extraction.total,
-      date: extraction.date,
-      items: extraction.items.map(item => ({
+      retailer: bestResult.extraction.retailer,
+      total: bestResult.extraction.total,
+      date: bestResult.extraction.date,
+      items: bestResult.extraction.items.map(item => ({
         name: item.name,
         price: item.price,
         quantity: item.quantity,
@@ -346,40 +461,48 @@ export async function processReceiptWithGoogleVision(imageBuffer: Buffer, debugM
     };
 
     if (debugMode) {
-      console.log('📊 Enhanced parsing results:');
-      console.log(`  🏪 Retailer: "${extraction.retailer}"`);
-      console.log(`  💰 Total: ${extraction.total} лв`);
-      console.log(`  📅 Date: ${new Date(extraction.date).toLocaleDateString('bg-BG')}`);
-      console.log(`  📦 Items: ${extraction.items.length}`);
-      console.log(`  🎯 Confidence: ${Math.round(extraction.confidence * 100)}%`);
-      console.log(`  ⚠️  Quality Issues: ${extraction.qualityIssues.length}`);
-      console.log(`  🔍 Store Format: ${extraction.metadata.detectedStore?.name || 'Generic'}`);
-      console.log(`  ⏱️  Processing Time: ${extraction.metadata.processingTime}ms`);
+      console.log('🏆 Best result selected:');
+      console.log(`  📸 Best variant: [${bestResult.variant}]`);
+      console.log(`  🏪 Retailer: "${bestResult.extraction.retailer}"`);
+      console.log(`  💰 Total: ${bestResult.extraction.total} лв`);
+      console.log(`  📅 Date: ${new Date(bestResult.extraction.date).toLocaleDateString('bg-BG')}`);
+      console.log(`  📦 Items: ${bestResult.extraction.items.length}`);
+      console.log(`  🎯 Final Confidence: ${Math.round(confidenceAnalysis.overallConfidence)}%`);
+      console.log(`  ✅ Math Valid: ${bestValidation?.isValid ? 'Yes' : 'No'} (${bestValidation?.confidence})`);
+      console.log(`  ⚠️  Manual Review: ${confidenceAnalysis.needsManualReview ? 'Required' : 'Not needed'}`);
 
-      extraction.items.forEach((item, i) => {
-        console.log(`    ${i + 1}. "${item.name}" - ${item.price} лв x${item.quantity} (${Math.round(item.confidence * 100)}% confidence)`);
-        if (item.category) console.log(`       Category: ${item.category}`);
-        if (item.qualityFlags.length > 0) {
-          console.log(`       Issues: ${item.qualityFlags.map(f => f.description).join(', ')}`);
-        }
+      if (bestValidation?.discrepancy && bestValidation.discrepancy > 0.01) {
+        console.log(`  💸 Discrepancy: ${bestValidation.discrepancy.toFixed(2)} лв`);
+      }
+
+      bestResult.extraction.items.forEach((item, i) => {
+        console.log(`    ${i + 1}. "${item.name}" - ${item.price} лв x${item.quantity}`);
       });
 
-      if (extraction.suggestions.length > 0) {
-        console.log('💡 Suggestions:');
-        extraction.suggestions.forEach(suggestion => console.log(`    ${suggestion}`));
+      if (confidenceAnalysis.reasons.length > 0) {
+        console.log('🚨 Confidence Issues:');
+        confidenceAnalysis.reasons.forEach(reason => console.log(`    ${reason}`));
       }
     }
 
+    const processingTime = Date.now() - startTime;
+
     return {
-      success: extraction.success,
+      success: bestResult.extraction.success,
       receipt: receiptData,
-      raw_text: fullText,
-      confidence: Math.round(extraction.confidence * 100),
-      extraction,
+      raw_text: bestResult.rawText,
+      confidence: Math.round(confidenceAnalysis.overallConfidence),
+      extraction: bestResult.extraction,
       qualityReport: {
-        issues: extraction.qualityIssues.length,
-        suggestions: extraction.suggestions,
-        processingTime: extraction.metadata.processingTime
+        issues: bestResult.extraction.qualityIssues.length,
+        suggestions: bestResult.extraction.suggestions,
+        processingTime
+      },
+      preprocessing: {
+        attempts: ocrResults.length,
+        bestAttempt: bestResult.variant,
+        imageQualityIssues: qualityAnalysis.issues,
+        validationResults: bestValidation
       }
     };
 
@@ -389,7 +512,18 @@ export async function processReceiptWithGoogleVision(imageBuffer: Buffer, debugM
     return {
       success: false,
       raw_text: `Google Vision OCR error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      confidence: 0
+      confidence: 0,
+      preprocessing: {
+        attempts: 0,
+        bestAttempt: 'none',
+        imageQualityIssues: ['Processing failed'],
+        validationResults: {
+          isValid: false,
+          discrepancy: 0,
+          confidence: 'low',
+          needsManualReview: true
+        }
+      }
     };
   }
 }
@@ -406,7 +540,7 @@ export async function testGoogleVisionSetup(): Promise<boolean> {
       return false;
     }
 
-    const client = createVisionClient();
+    const client = await createVisionClient();
 
     // Test with a simple image buffer (1x1 pixel)
     const testImage = Buffer.from([0x89, 0x50, 0x4E, 0x47]); // PNG header

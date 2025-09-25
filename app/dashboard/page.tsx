@@ -13,8 +13,6 @@ import CategoryBreakdown from '@/components/dashboard/CategoryBreakdown';
 import RecentReceipts from '@/components/dashboard/RecentReceipts';
 import ErrorMessage from '@/components/ui/ErrorMessage';
 import { createClient } from '@supabase/supabase-js';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 
 export default function DashboardPage() {
   return (
@@ -33,27 +31,6 @@ function DashboardContent() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  async function createDemoReceipt() {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-
-      const response = await fetch('/api/debug/create-demo-receipt', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        window.location.href = result.review_url;
-      }
-    } catch (error) {
-      console.error('Failed to create demo receipt:', error);
-    }
-  }
 
   return (
     <div className="py-8">
@@ -90,26 +67,6 @@ function DashboardContent() {
           />
         </div>
 
-        {/* Demo Receipt for Testing */}
-        {(!stats?.recentReceipts || stats.recentReceipts.length === 0) && (
-          <Card className="mb-8 border-blue-200 bg-blue-50">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-medium text-blue-900">
-                    🎉 Тествайте функцията за преглед на касови бележки!
-                  </h3>
-                  <p className="text-blue-700 mt-1">
-                    Създайте демо касова бележка за да тествате категоризирането и прегледа.
-                  </p>
-                </div>
-                <Button onClick={createDemoReceipt} className="bg-blue-600 hover:bg-blue-700">
-                  📝 Създай демо бележка
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Dashboard Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

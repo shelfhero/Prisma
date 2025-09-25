@@ -380,7 +380,6 @@ export class ReceiptFlowTester {
         total_amount: 25.50,
         currency: 'BGN',
         purchased_at: new Date().toISOString(),
-        receipt_number: `TEST-${Date.now()}`,
         raw_text: 'Тестова бележка\nПродукт 1: 10.00 лв\nПродукт 2: 15.50 лв'
       })
       .select()
@@ -455,7 +454,7 @@ export class ReceiptFlowTester {
       .from('receipts')
       .delete()
       .eq('user_id', userId)
-      .ilike('receipt_number', 'TEST-%');
+      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Delete receipts created in last 24h
 
     if (deleteError) {
       throw new Error(`Грешка при изчистване на тестови данни: ${deleteError.message}`);

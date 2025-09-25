@@ -16,9 +16,6 @@ export interface EnvConfig {
   SUPABASE_SERVICE_ROLE_KEY: string;
   NEXT_PUBLIC_SUPABASE_ANON_KEY?: string;
 
-  // TabScanner Configuration
-  TABSCANNER_API_KEY: string;
-  TABSCANNER_ENDPOINT: string;
 
   // Application Configuration
   NODE_ENV?: string;
@@ -30,7 +27,6 @@ export const ENV_ERRORS = {
   MISSING_REQUIRED: 'Липсват задължителни променливи в конфигурацията',
   INVALID_FORMAT: 'Невалиден формат на променлива',
   SUPABASE_URL_INVALID: 'NEXT_PUBLIC_SUPABASE_URL трябва да започва с https://',
-  TABSCANNER_ENDPOINT_INVALID: 'TABSCANNER_ENDPOINT трябва да започва с https://',
   API_KEY_PLACEHOLDER: 'API ключът изглежда като placeholder стойност',
   CONFIG_NOT_LOADED: 'Конфигурацията не е заредена правилно',
   DEVELOPMENT_ONLY: 'Тази функция работи само в development режим'
@@ -49,8 +45,6 @@ export function validateEnvironmentVariables(): EnvValidationResult {
   const requiredVars = [
     'NEXT_PUBLIC_SUPABASE_URL',
     'SUPABASE_SERVICE_ROLE_KEY',
-    'TABSCANNER_API_KEY',
-    'TABSCANNER_ENDPOINT'
   ];
 
   const optionalVars = [
@@ -137,17 +131,6 @@ function validateSpecificVar(varName: string, value: string): { valid: boolean; 
       }
       break;
 
-    case 'TABSCANNER_ENDPOINT':
-      if (!value.startsWith('https://')) {
-        return { valid: false, error: ENV_ERRORS.TABSCANNER_ENDPOINT_INVALID };
-      }
-      break;
-
-    case 'TABSCANNER_API_KEY':
-      if (value.length < 10) {
-        return { valid: false, error: 'API ключът изглежда твърде кратък' };
-      }
-      break;
 
     case 'SUPABASE_SERVICE_ROLE_KEY':
       if (!value.startsWith('eyJ')) {
@@ -173,8 +156,6 @@ export function getEnvConfig(): EnvConfig {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL!,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY!,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    TABSCANNER_API_KEY: process.env.TABSCANNER_API_KEY!,
-    TABSCANNER_ENDPOINT: process.env.TABSCANNER_ENDPOINT!,
     NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL
   };
@@ -233,8 +214,6 @@ export function displayEnvironmentStatus(): void {
   const requiredVars = [
     'NEXT_PUBLIC_SUPABASE_URL',
     'SUPABASE_SERVICE_ROLE_KEY',
-    'TABSCANNER_API_KEY',
-    'TABSCANNER_ENDPOINT'
   ];
 
   requiredVars.forEach(varName => {
