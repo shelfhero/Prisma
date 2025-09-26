@@ -81,9 +81,17 @@ export default function LoginPage() {
     setAuthError('');
 
     try {
-      await signIn(formData.email, formData.password);
+      console.log('Attempting login for:', formData.email);
+
+      const data = await signIn(formData.email, formData.password);
+
+      console.log('Login successful:', data.user?.email);
+
+      // Small delay to allow auth state to update
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Redirect to dashboard or intended page
+      console.log('Redirecting to:', redirectTo);
       router.push(redirectTo);
     } catch (error: any) {
       console.error('Login error:', error);

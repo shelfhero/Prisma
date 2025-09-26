@@ -66,10 +66,13 @@ export const createBrowserClient = () => {
             'X-Client-Info': 'Prizma-Web-App'
           },
           fetch: (url: any, options: any = {}) => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
             return fetch(url, {
               ...options,
-              signal: AbortSignal.timeout(10000) // 10 second timeout
-            });
+              signal: controller.signal
+            }).finally(() => clearTimeout(timeoutId));
           }
         }
       });
@@ -87,10 +90,13 @@ export const createBrowserClient = () => {
           'X-Client-Info': 'Prizma-Web-App'
         },
         fetch: (url, options = {}) => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
           return fetch(url, {
             ...options,
-            signal: AbortSignal.timeout(10000) // 10 second timeout
-          });
+            signal: controller.signal
+          }).finally(() => clearTimeout(timeoutId));
         }
       }
     });

@@ -7,6 +7,18 @@ import { EnhancedReceiptParser } from './receipt-parsing/enhanced-parser';
 import { ReceiptExtraction } from './receipt-parsing/types';
 import { ReceiptImagePreprocessor, ReceiptValidator, PreprocessedImage } from './image-preprocessing';
 
+// Import Google Cloud Vision at module level to avoid Jest worker issues
+let ImageAnnotatorClient: any = null;
+try {
+  // Only import if we're not in a test environment
+  if (typeof window === 'undefined' && !process.env.JEST_WORKER_ID) {
+    const vision = require('@google-cloud/vision');
+    ImageAnnotatorClient = vision.ImageAnnotatorClient;
+  }
+} catch (error) {
+  console.warn('Google Cloud Vision not available in this environment');
+}
+
 interface ReceiptData {
   retailer: string;
   total: number;
@@ -45,7 +57,7 @@ interface OCRResponse {
   };
 }
 
-// Initialize Google Cloud Vision client with dynamic import
+// Initialize Google Cloud Vision client
 async function createVisionClient() {
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
   const apiKey = process.env.GOOGLE_CLOUD_API_KEY;
@@ -55,10 +67,11 @@ async function createVisionClient() {
     throw new Error('Google Cloud Vision not configured');
   }
 
-  try {
-    // Dynamic import to avoid Jest worker issues
-    const { ImageAnnotatorClient } = await import('@google-cloud/vision');
+  if (!ImageAnnotatorClient) {
+    throw new Error('Google Cloud Vision not available in this environment');
+  }
 
+  try {
     // Use API key if available, otherwise fall back to service account
     const clientConfig: any = {};
 

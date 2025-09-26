@@ -76,30 +76,46 @@ export default function RegisterPage() {
     setAuthError('');
 
     try {
+      console.log('Starting registration for:', formData.email);
+
       // Sign up user
       const data = await signUp(formData.email, formData.password, {
         full_name: formData.fullName
       });
 
+      console.log('Signup result:', data);
+
       if (data?.user) {
+        console.log('User created successfully:', data.user.id);
+
         // Wait a moment for the session to be established
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
         try {
           // Create user profile
+          console.log('Creating user profile...');
           await createUserProfile(data.user);
+          console.log('Profile created successfully');
         } catch (profileError: any) {
           console.warn('Profile creation failed, but user was created:', profileError.message);
           // Don't fail the whole registration if profile creation fails
           // The profile can be created later or via database trigger
         }
 
-        setIsSuccess(true);
-
-        // Redirect to dashboard after a short delay
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 2000);
+        // Check if email confirmation is required
+        if (data.session) {
+          console.log('User has active session, redirecting to dashboard');
+          setIsSuccess(true);
+          setTimeout(() => {
+            router.push('/dashboard');
+          }, 2000);
+        } else {
+          console.log('Email confirmation required');
+          setIsSuccess(true);
+          // Show success message but don't redirect yet
+        }
+      } else {
+        throw new Error('User creation failed - no user returned');
       }
     } catch (error: any) {
       console.error('Registration error:', error);
@@ -175,7 +191,30 @@ export default function RegisterPage() {
                 clipRule="evenodd"
               />
             </svg>
-            <p className="text-sm text-red-700">{authError}</p>
+            <div className="flex-1">
+              <p className="text-sm text-red-700">{authError}</p>
+              {authError.includes('вече съществува') && (
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-red-600">
+                    Ако имате профил, опитайте:
+                  </p>
+                  <div className="flex gap-2">
+                    <Link
+                      href="/auth/login"
+                      className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
+                    >
+                      Влизане в профил
+                    </Link>
+                    <Link
+                      href="/auth/forgot-password"
+                      className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200"
+                    >
+                      Забравена парола
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

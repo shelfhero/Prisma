@@ -207,11 +207,25 @@ export async function createUserProfile(user: SupabaseUser) {
 
   const { data, error } = await supabase
     .from('profiles')
-    .insert(profile)
+    .upsert(profile, { onConflict: 'id' })
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.warn('Profile creation error:', error);
+    // If profile already exists, try to get it
+    if (error.code === '23505') { // unique_violation
+      const { data: existingProfile, error: getError } = await supabase
+        .from('profiles')
+        .select()
+        .eq('id', user.id)
+        .single();
+
+      if (getError) throw getError;
+      return existingProfile;
+    }
+    throw error;
+  }
 
   return data;
 }
@@ -327,7 +341,7 @@ export function getAuthErrorMessage(error: AuthError): string {
       return 'Паролата трябва да е поне 6 символа';
 
     case 'User already registered':
-      return 'Потребител с този имейл вече съществува';
+      return 'Потребител с този имейл вече съществува. Опитайте да влезете в профила си или възстановете паролата.';
 
     case 'Signup is disabled':
       return 'Регистрацията е временно недостъпна';
@@ -379,7 +393,7 @@ export function getAuthErrorMessage(error: AuthError): string {
   }
 
   if (message.includes('already') && message.includes('registered')) {
-    return 'Потребител с този имейл вече съществува';
+    return 'Потребител с този имейл вече съществува. Опитайте да влезете в профила си или възстановете паролата.';
   }
 
   // Default fallback

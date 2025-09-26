@@ -60,18 +60,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = async () => {
     if (!supabase) {
+      console.error('No Supabase client available');
       setLoading(false);
       return;
     }
 
     try {
+      console.log('Refreshing user authentication...');
+
       // Add timeout to auth request
       const authPromise = supabase.auth.getUser();
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Auth timeout')), 8000)
       );
 
-      const { data: { user: currentUser } } = await Promise.race([authPromise, timeoutPromise]);
+      const { data: { user: currentUser }, error: userError } = await Promise.race([authPromise, timeoutPromise]);
+
+      if (userError) {
+        console.error('Error getting user:', userError);
+        throw userError;
+      }
+
+      console.log('User fetched:', currentUser?.email || 'No user');
       setUser(currentUser);
 
       // Cache auth state

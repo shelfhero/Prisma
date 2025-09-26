@@ -9,7 +9,7 @@ const nextConfig = {
   },
 
   // Simple webpack override - just disable caching and workers
-  webpack: (config, { dev }) => {
+  webpack: (config, { dev, isServer }) => {
     // Disable webpack cache completely
     config.cache = false;
 
@@ -22,11 +22,23 @@ const nextConfig = {
       return !name.includes('Worker') && !name.includes('Thread');
     });
 
+    // Handle Google Cloud Vision specifically
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push({
+        '@google-cloud/vision': 'commonjs @google-cloud/vision'
+      });
+    }
+
     // Disable worker fallbacks
     config.resolve = config.resolve || {};
     config.resolve.fallback = config.resolve.fallback || {};
     config.resolve.fallback.worker_threads = false;
     config.resolve.fallback.child_process = false;
+    config.resolve.fallback.os = false;
+    config.resolve.fallback.fs = false;
+    config.resolve.fallback.net = false;
+    config.resolve.fallback.tls = false;
 
     return config;
   },
