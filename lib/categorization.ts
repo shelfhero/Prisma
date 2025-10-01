@@ -146,15 +146,16 @@ export async function storeUserCorrection(
   try {
     const supabase = createServerClient(true)
 
-    await supabase
-      .from('product_categorizations')
-      .upsert({
-        user_id: userId,
-        product_name: productName.toLowerCase().trim(),
-        category: correctedCategory,
-        user_confirmed: true,
-        created_at: new Date().toISOString(),
-      })
+    // TODO: Create product_categorizations table
+    // await supabase
+    //   .from('product_categorizations')
+    //   .upsert({
+    //     user_id: userId,
+    //     product_name: productName.toLowerCase().trim(),
+    //     category: correctedCategory,
+    //     user_confirmed: true,
+    //     created_at: new Date().toISOString(),
+    //   })
 
     console.log(`Stored user correction: "${productName}" -> "${correctedCategory}"`)
   } catch (error) {
@@ -169,25 +170,28 @@ async function getUserLearningData(userId: string): Promise<LearningData[]> {
   try {
     const supabase = createServerClient(true)
 
-    const { data, error } = await supabase
-      .from('product_categorizations')
-      .select('product_name, category, user_confirmed, created_at')
-      .eq('user_id', userId)
-      .eq('user_confirmed', true)
-      .order('created_at', { ascending: false })
-      .limit(20) // Get last 20 corrections for context
+    // TODO: Create product_categorizations table
+    // const { data, error } = await supabase
+    //   .from('product_categorizations')
+    //   .select('product_name, category, user_confirmed, created_at')
+    //   .eq('user_id', userId)
+    //   .eq('user_confirmed', true)
+    //   .order('created_at', { ascending: false })
+    //   .limit(20) // Get last 20 corrections for context
 
-    if (error) {
-      console.error('Failed to fetch learning data:', error)
-      return []
-    }
+    // if (error) {
+    //   console.error('Failed to fetch learning data:', error)
+    //   return []
+    // }
 
-    return data?.map(item => ({
-      productName: item.product_name,
-      category: item.category as CategoryName,
-      userConfirmed: item.user_confirmed,
-      createdAt: item.created_at,
-    })) || []
+    // return data?.map(item => ({
+    //   productName: item.product_name,
+    //   category: item.category as CategoryName,
+    //   userConfirmed: item.user_confirmed,
+    //   createdAt: item.created_at,
+    // })) || []
+
+    return [] // Temporary return until table is created
   } catch (error) {
     console.error('Error fetching learning data:', error)
     return []

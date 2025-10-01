@@ -9,7 +9,11 @@ import { openai, OPENAI_MODELS } from '@/lib/openai';
 // Import Google Cloud Vision safely
 let ImageAnnotatorClient: any = null;
 try {
-  if (typeof window === 'undefined' && !process.env.JEST_WORKER_ID) {
+  // Only load in Node.js server environment, not in Jest workers or edge runtime
+  if (typeof window === 'undefined' &&
+      !process.env.JEST_WORKER_ID &&
+      !process.env.EDGE_RUNTIME &&
+      typeof require !== 'undefined') {
     const vision = require('@google-cloud/vision');
     ImageAnnotatorClient = vision.ImageAnnotatorClient;
   }
@@ -23,6 +27,10 @@ interface ReceiptItem {
   quantity: number;
   unitPrice: number;
   confidence: number;
+  category_id?: string;
+  category_name?: string;
+  category_confidence?: number;
+  category_method?: string;
 }
 
 interface ProcessedReceipt {
@@ -77,11 +85,14 @@ export class UltimateReceiptProcessor {
 
       console.log(`✅ ULTIMATE SUCCESS: ${finalResult.items.length} items, ${finalResult.total} лв, ${finalResult.retailer}`);
 
+      // STEP 5: Auto-categorize all items
+      const categorizedReceipt = await this.categorizeItems(finalResult);
+
       return {
         success: true,
-        receipt: finalResult,
+        receipt: categorizedReceipt,
         raw_text: rawText,
-        confidence: finalResult.confidence
+        confidence: categorizedReceipt.confidence
       };
 
     } catch (error) {
@@ -583,6 +594,54 @@ EXTRACT ALL ITEMS - aim for 25-35 items for a typical LIDL receipt. Be thorough!
 
     console.log(`✅ Quality check PASSED: ${result.items.length} items, ${result.total} лв, ${result.retailer}`);
     return true;
+  }
+
+  /**
+   * STEP 5: Auto-categorize all items using the categorization engine
+   */
+  async categorizeItems(receipt: ProcessedReceipt): Promise<ProcessedReceipt> {
+    console.log('🏷️  Starting auto-categorization for', receipt.items.length, 'items');
+
+    // Import categorization engine dynamically
+    const { categorizeProducts } = await import('./categorization-engine');
+
+    // Prepare items for categorization
+    const productsToCategories = receipt.items.map((item, index) => ({
+      name: item.name,
+      id: String(index),
+    }));
+
+    // Batch categorize all products
+    const categorizations = await categorizeProducts(
+      productsToCategories,
+      receipt.retailer,
+      undefined // userId not available during processing, will be added on save
+    );
+
+    // Merge categorization results back into items
+    const categorizedItems = receipt.items.map((item, index) => {
+      const cat = categorizations[index];
+      return {
+        ...item,
+        category_id: cat.category_id,
+        category_name: cat.category_name,
+        category_confidence: cat.confidence,
+        category_method: cat.method,
+      };
+    });
+
+    console.log('✅ Auto-categorization complete:', {
+      total: categorizedItems.length,
+      methods: categorizations.reduce((acc, cat) => {
+        acc[cat.method] = (acc[cat.method] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+    });
+
+    return {
+      ...receipt,
+      items: categorizedItems,
+    };
   }
 }
 

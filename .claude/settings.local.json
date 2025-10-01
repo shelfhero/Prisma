@@ -22,7 +22,14 @@
       "Bash(netstat:*)",
       "Bash(findstr:*)",
       "Bash(if exist .next rmdir /s /q .next)",
-      "Bash(cmd /c:*)"
+      "Bash(cmd /c:*)",
+      "Bash(git push:*)",
+      "Bash(timeout:*)",
+      "Bash(start http://localhost:3001/simple-dashboard)",
+      "Bash(cp:*)",
+      "Bash(rm:*)",
+      "Read(//c/Projects/backup-dashboard-removed/**)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

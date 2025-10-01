@@ -26,28 +26,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [profile, setProfile] = useState<Tables<'profiles'> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-
-  // Initialize auth state from cache immediately
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const cachedAuth = localStorage.getItem('prizma_auth_cache');
-      if (cachedAuth) {
-        try {
-          const { user: cachedUser, timestamp } = JSON.parse(cachedAuth);
-          // Use cached data if less than 5 minutes old
-          if (Date.now() - timestamp < 5 * 60 * 1000) {
-            setUser(cachedUser);
-            setLoading(false);
-            return; // Early return to prevent further auth checks
-          }
-        } catch (err) {
-          localStorage.removeItem('prizma_auth_cache');
-        }
-      }
-    }
-  }, []);
 
   let supabase: any = null;
   try {
@@ -150,13 +131,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Initialize from cache on mount (client-side only)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !initialized) {
+      const cachedAuth = localStorage.getItem('prizma_auth_cache');
+      if (cachedAuth) {
+        try {
+          const { user: cachedUser, timestamp } = JSON.parse(cachedAuth);
+          // Use cached data if less than 5 minutes old
+          if (Date.now() - timestamp < 5 * 60 * 1000) {
+            setUser(cachedUser);
+            setLoading(false);
+            setInitialized(true);
+            return;
+          }
+        } catch (err) {
+          localStorage.removeItem('prizma_auth_cache');
+        }
+      }
+    }
+  }, [initialized]);
+
   useEffect(() => {
     if (!supabase) return;
 
-    // Only refresh if we don't have cached data and loading is still true
-    const cachedAuth = typeof window !== 'undefined' ? localStorage.getItem('prizma_auth_cache') : null;
-    if (!cachedAuth && loading) {
-      refreshUser();
+    // Only fetch if not initialized from cache
+    if (!initialized) {
+      refreshUser().then(() => setInitialized(true));
     }
 
     // Listen for auth changes
@@ -212,7 +213,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const value: AuthContextType = {
     user,

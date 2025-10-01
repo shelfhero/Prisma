@@ -63,7 +63,10 @@ export const createBrowserClient = () => {
         },
         global: {
           headers: {
-            'X-Client-Info': 'Prizma-Web-App'
+            'X-Client-Info': 'Prizma-Web-App',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
           },
           fetch: (url: any, options: any = {}) => {
             const controller = new AbortController();
@@ -87,7 +90,10 @@ export const createBrowserClient = () => {
       },
       global: {
         headers: {
-          'X-Client-Info': 'Prizma-Web-App'
+          'X-Client-Info': 'Prizma-Web-App',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
         },
         fetch: (url, options = {}) => {
           const controller = new AbortController();
@@ -121,7 +127,10 @@ export const createServerClient = (useServiceKey = false) => {
     },
     global: {
       headers: {
-        'X-Client-Info': useServiceKey ? 'Prizma-Server-Admin' : 'Prizma-Server-App'
+        'X-Client-Info': useServiceKey ? 'Prizma-Server-Admin' : 'Prizma-Server-App',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
       }
     }
   });
@@ -161,7 +170,10 @@ export const createAdminClient = () => {
     },
     global: {
       headers: {
-        'X-Client-Info': 'Prizma-Admin'
+        'X-Client-Info': 'Prizma-Admin',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
       }
     }
   });

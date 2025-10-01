@@ -9,6 +9,10 @@ interface ReceiptItem {
   product_name: string;
   price: number;
   quantity: number;
+  category_id?: string;
+  category_name?: string;
+  category_confidence?: number;
+  category_method?: string;
 }
 
 interface Receipt {
@@ -139,6 +143,25 @@ export default function VerifyReceiptPage() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('bg-BG');
+  };
+
+  const getCategoryDisplay = (categoryId?: string, categoryName?: string) => {
+    const categories: Record<string, { icon: string; color: string }> = {
+      basic_foods: { icon: '🍎', color: 'bg-green-100 text-green-800' },
+      ready_meals: { icon: '🍕', color: 'bg-orange-100 text-orange-800' },
+      snacks: { icon: '🍿', color: 'bg-yellow-100 text-yellow-800' },
+      drinks: { icon: '🥤', color: 'bg-blue-100 text-blue-800' },
+      household: { icon: '🧹', color: 'bg-purple-100 text-purple-800' },
+      personal_care: { icon: '🧴', color: 'bg-pink-100 text-pink-800' },
+      other: { icon: '📦', color: 'bg-gray-100 text-gray-800' },
+    };
+
+    const cat = categories[categoryId || 'other'] || categories.other;
+    return {
+      icon: cat.icon,
+      name: categoryName || 'Други',
+      color: cat.color,
+    };
   };
 
   if (loading) {
@@ -332,9 +355,22 @@ export default function VerifyReceiptPage() {
                                 </svg>
                               </button>
                             </div>
-                            <div className="text-xs text-gray-600 mt-1">
-                              Кол: {item.quantity} × {formatCurrency(item.price, receipt.currency)}
+                            <div className="flex items-center space-x-2 mt-1">
+                              <span className="text-xs text-gray-600">
+                                Кол: {item.quantity} × {formatCurrency(item.price, receipt.currency)}
+                              </span>
+                              {item.category_id && (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getCategoryDisplay(item.category_id, item.category_name).color}`}>
+                                  <span className="mr-1">{getCategoryDisplay(item.category_id, item.category_name).icon}</span>
+                                  {getCategoryDisplay(item.category_id, item.category_name).name}
+                                </span>
+                              )}
                             </div>
+                            {item.category_confidence !== undefined && item.category_confidence < 0.7 && (
+                              <div className="text-xs text-amber-600 mt-1">
+                                ⚠️ Ниска увереност ({Math.round(item.category_confidence * 100)}%)
+                              </div>
+                            )}
                           </div>
                           <div className="text-right">
                             <div className="font-semibold text-sm">

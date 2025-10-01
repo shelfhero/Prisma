@@ -33,13 +33,22 @@ export async function GET(request: NextRequest) {
 
     console.log('3. User authenticated:', user.id);
 
-    // Test the simplest possible query first
-    console.log('4. Testing simple receipts query...');
+    // Fetch receipts with full details including retailer, items count
+    console.log('4. Fetching receipts with full details...');
     const { data: receipts, error } = await supabase
       .from('receipts')
-      .select('id, total_amount, currency')
+      .select(`
+        id,
+        total_amount,
+        currency,
+        purchased_at,
+        created_at,
+        retailers (
+          name
+        )
+      `)
       .eq('user_id', user.id)
-      .limit(5);
+      .order('created_at', { ascending: false });
 
     console.log('5. Query result:', {
       success: !error,
@@ -56,23 +65,30 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    console.log('6. Creating simple response...');
+    console.log('6. Fetching items count for each receipt...');
 
-    // Return minimal data for now to test
-    const transformedReceipts = receipts?.map(receipt => ({
-      id: receipt.id,
-      retailerName: 'Test Store',
-      totalAmount: receipt.total_amount,
-      currency: receipt.currency,
-      purchasedAt: new Date().toISOString(),
-      storeLocation: 'Test Location',
-      itemsCount: 1,
-      notes: '',
-      createdAt: new Date().toISOString()
-    })) || [];
+    // Get items count for each receipt
+    const receiptsWithCounts = await Promise.all((receipts || []).map(async (receipt) => {
+      const { count } = await supabase
+        .from('items')
+        .select('*', { count: 'exact', head: true })
+        .eq('receipt_id', receipt.id);
 
-    console.log('7. Returning response with', transformedReceipts.length, 'receipts');
-    return NextResponse.json({ receipts: transformedReceipts });
+      return {
+        id: receipt.id,
+        retailerName: receipt.retailers?.name || 'Неизвестен магазин',
+        totalAmount: receipt.total_amount,
+        currency: receipt.currency,
+        purchasedAt: receipt.purchased_at,
+        storeLocation: receipt.retailers?.name || '',
+        itemsCount: count || 0,
+        notes: '',
+        createdAt: receipt.created_at
+      };
+    }));
+
+    console.log('7. Returning response with', receiptsWithCounts.length, 'receipts');
+    return NextResponse.json({ receipts: receiptsWithCounts });
 
   } catch (error) {
     console.error('API error:', error);
