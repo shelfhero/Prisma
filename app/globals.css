@@ -50,14 +50,35 @@
 
   html {
     font-family: Inter, system-ui, sans-serif;
+    overflow-x: hidden;
+    width: 100%;
   }
 
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
   }
 
   * {
     @apply border-border;
+  }
+
+  /* Prevent horizontal scroll on all elements */
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  /* Ensure images and media don't overflow */
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+    height: auto;
   }
 }
 

@@ -20,6 +20,8 @@ interface RegisterFormData {
   password: string;
   confirmPassword: string;
   acceptTerms: boolean;
+  acceptPrivacy: boolean;
+  acceptDataProcessing: boolean;
 }
 
 export default function RegisterPage() {
@@ -29,7 +31,9 @@ export default function RegisterPage() {
     email: '',
     password: '',
     confirmPassword: '',
-    acceptTerms: false
+    acceptTerms: false,
+    acceptPrivacy: false,
+    acceptDataProcessing: false
   });
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +43,9 @@ export default function RegisterPage() {
   const handleInputChange = (field: keyof RegisterFormData) => (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const value = field === 'acceptTerms' ? e.target.checked : e.target.value;
+    const value = ['acceptTerms', 'acceptPrivacy', 'acceptDataProcessing'].includes(field)
+      ? e.target.checked
+      : e.target.value;
     setFormData(prev => ({ ...prev, [field]: value }));
 
     // Clear field error when user starts typing
@@ -59,11 +65,25 @@ export default function RegisterPage() {
     // Validate form
     const validationErrors = validateRegisterForm(formData);
 
-    // Check if terms are accepted
+    // Check if all consents are accepted (GDPR requirement)
     if (!formData.acceptTerms) {
       validationErrors.push({
         field: 'acceptTerms',
         message: 'Трябва да приемете условията за ползване'
+      });
+    }
+
+    if (!formData.acceptPrivacy) {
+      validationErrors.push({
+        field: 'acceptPrivacy',
+        message: 'Трябва да приемете политиката за поверителност'
+      });
+    }
+
+    if (!formData.acceptDataProcessing) {
+      validationErrors.push({
+        field: 'acceptDataProcessing',
+        message: 'Трябва да се съгласите с обработката на данните с AI технологии'
       });
     }
 
@@ -104,10 +124,10 @@ export default function RegisterPage() {
 
         // Check if email confirmation is required
         if (data.session) {
-          console.log('User has active session, redirecting to dashboard');
+          console.log('User has active session, redirecting to onboarding');
           setIsSuccess(true);
           setTimeout(() => {
-            router.push('/dashboard');
+            router.push('/onboarding');
           }, 2000);
         } else {
           console.log('Email confirmation required');
@@ -302,52 +322,101 @@ export default function RegisterPage() {
           }
         />
 
-        {/* Terms and Conditions */}
-        <div className="space-y-2">
-          <div className="flex items-start">
-            <input
-              id="accept-terms"
-              name="accept-terms"
-              type="checkbox"
-              checked={formData.acceptTerms}
-              onChange={handleInputChange('acceptTerms')}
-              className="h-4 w-4 mt-0.5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <label htmlFor="accept-terms" className="ml-3 block text-sm text-gray-700">
-              Приемам{' '}
-              <Link
-                href="/terms"
-                className="text-blue-600 hover:text-blue-500 underline"
-                target="_blank"
-              >
-                условията за ползване
-              </Link>
-              {' '}и{' '}
-              <Link
-                href="/privacy"
-                className="text-blue-600 hover:text-blue-500 underline"
-                target="_blank"
-              >
-                политиката за поверителност
-              </Link>
-            </label>
+        {/* GDPR Consent Checkboxes */}
+        <div className="space-y-3 bg-gray-50 rounded-lg p-4 border border-gray-200">
+          <p className="text-sm font-medium text-gray-900 mb-2">
+            За да продължите, моля потвърдете:
+          </p>
+
+          {/* Terms of Service */}
+          <div className="space-y-1">
+            <div className="flex items-start">
+              <input
+                id="accept-terms"
+                name="accept-terms"
+                type="checkbox"
+                checked={formData.acceptTerms}
+                onChange={handleInputChange('acceptTerms')}
+                className="h-4 w-4 mt-0.5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="accept-terms" className="ml-3 block text-sm text-gray-700">
+                Приемам{' '}
+                <Link
+                  href="/terms"
+                  className="text-blue-600 hover:text-blue-500 underline font-medium"
+                  target="_blank"
+                >
+                  Условията за ползване
+                </Link>
+              </label>
+            </div>
+            {getFieldError(errors, 'acceptTerms') && (
+              <p className="text-sm text-red-600 flex items-center ml-7">
+                <svg className="h-4 w-4 mr-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                {getFieldError(errors, 'acceptTerms')}
+              </p>
+            )}
           </div>
-          {getFieldError(errors, 'acceptTerms') && (
-            <p className="text-sm text-red-600 flex items-center ml-7">
-              <svg
-                className="h-4 w-4 mr-1 flex-shrink-0"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                  clipRule="evenodd"
-                />
-              </svg>
-              {getFieldError(errors, 'acceptTerms')}
-            </p>
-          )}
+
+          {/* Privacy Policy */}
+          <div className="space-y-1">
+            <div className="flex items-start">
+              <input
+                id="accept-privacy"
+                name="accept-privacy"
+                type="checkbox"
+                checked={formData.acceptPrivacy}
+                onChange={handleInputChange('acceptPrivacy')}
+                className="h-4 w-4 mt-0.5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="accept-privacy" className="ml-3 block text-sm text-gray-700">
+                Приемам{' '}
+                <Link
+                  href="/privacy"
+                  className="text-blue-600 hover:text-blue-500 underline font-medium"
+                  target="_blank"
+                >
+                  Политиката за поверителност
+                </Link>
+              </label>
+            </div>
+            {getFieldError(errors, 'acceptPrivacy') && (
+              <p className="text-sm text-red-600 flex items-center ml-7">
+                <svg className="h-4 w-4 mr-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                {getFieldError(errors, 'acceptPrivacy')}
+              </p>
+            )}
+          </div>
+
+          {/* AI Data Processing Consent */}
+          <div className="space-y-1">
+            <div className="flex items-start">
+              <input
+                id="accept-ai"
+                name="accept-ai"
+                type="checkbox"
+                checked={formData.acceptDataProcessing}
+                onChange={handleInputChange('acceptDataProcessing')}
+                className="h-4 w-4 mt-0.5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="accept-ai" className="ml-3 block text-sm text-gray-700">
+                Съгласен съм личните ми данни да бъдат обработвани с AI технологии
+                (Google Vision, OpenAI) за целите на услугата
+              </label>
+            </div>
+            {getFieldError(errors, 'acceptDataProcessing') && (
+              <p className="text-sm text-red-600 flex items-center ml-7">
+                <svg className="h-4 w-4 mr-1 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                {getFieldError(errors, 'acceptDataProcessing')}
+              </p>
+            )}
+          </div>
         </div>
 
         <Button

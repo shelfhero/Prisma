@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import AutoProcessSuccess from '@/components/receipt/AutoProcessSuccess';
 import { ProcessingResult } from '@/lib/auto-processor';
 
-export default function ReceiptSuccessPage({ params }: { params: { receiptId: string } }) {
+export default function ReceiptSuccessPage() {
+  const params = useParams();
+  const receiptId = params.receiptId as string;
   const supabase = createClientComponentClient();
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<ProcessingResult | null>(null);
@@ -14,7 +17,7 @@ export default function ReceiptSuccessPage({ params }: { params: { receiptId: st
 
   useEffect(() => {
     loadReceiptResult();
-  }, [params.receiptId]);
+  }, [receiptId]);
 
   const loadReceiptResult = async () => {
     try {
@@ -22,7 +25,7 @@ export default function ReceiptSuccessPage({ params }: { params: { receiptId: st
       const { data: receiptData, error: receiptError } = await supabase
         .from('receipts')
         .select('*')
-        .eq('id', params.receiptId)
+        .eq('id', receiptId)
         .single();
 
       if (receiptError) throw receiptError;
@@ -31,7 +34,7 @@ export default function ReceiptSuccessPage({ params }: { params: { receiptId: st
       const { data: itemsData, error: itemsError } = await supabase
         .from('receipt_items')
         .select('*')
-        .eq('receipt_id', params.receiptId);
+        .eq('receipt_id', receiptId);
 
       if (itemsError) throw itemsError;
 
@@ -119,7 +122,7 @@ export default function ReceiptSuccessPage({ params }: { params: { receiptId: st
   return (
     <AutoProcessSuccess
       result={result}
-      receiptId={params.receiptId}
+      receiptId={receiptId}
       merchantName={merchantName}
     />
   );

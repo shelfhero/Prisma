@@ -8,10 +8,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // GET - Fetch receipt with items
 export async function GET(
   request: NextRequest,
-  { params }: { params: { receiptId: string } }
+  { params }: { params: Promise<{ receiptId: string }> }
 ) {
   try {
-    const { receiptId } = params;
+    const { receiptId } = await params;
 
     // Get user from auth header
     const authHeader = request.headers.get('authorization');

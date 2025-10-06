@@ -62,6 +62,15 @@ const Navigation = () => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
       )
+    },
+    {
+      name: 'Помощ',
+      href: '/help',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )
     }
   ];
 
@@ -117,6 +126,20 @@ const Navigation = () => {
               <div className="w-20 h-8 bg-gray-200 rounded-md animate-pulse"></div>
             ) : user ? (
               <div className="flex items-center space-x-4">
+                <Link
+                  href="/settings"
+                  className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActivePage('/settings')
+                      ? 'text-blue-600 bg-blue-50'
+                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>Настройки</span>
+                </Link>
                 <span className="text-sm text-gray-700">
                   {user.email}
                 </span>
@@ -131,12 +154,26 @@ const Navigation = () => {
                 </button>
               </div>
             ) : (
-              <Link
-                href="/auth/login"
-                className="flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-              >
-                <span>Влизане</span>
-              </Link>
+              <div className="flex items-center space-x-4">
+                <Link
+                  href="/privacy"
+                  className="text-sm text-gray-500 hover:text-gray-700"
+                >
+                  Поверителност
+                </Link>
+                <Link
+                  href="/terms"
+                  className="text-sm text-gray-500 hover:text-gray-700"
+                >
+                  Условия
+                </Link>
+                <Link
+                  href="/auth/login"
+                  className="flex items-center space-x-2 px-4 py-2 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  <span>Влизане</span>
+                </Link>
+              </div>
             )}
           </div>
 
@@ -187,6 +224,21 @@ const Navigation = () => {
                 <div className="flex items-center px-3 py-2">
                   <span className="text-sm text-gray-700">{user.email}</span>
                 </div>
+                <Link
+                  href="/settings"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-md text-base font-medium ${
+                    isActivePage('/settings')
+                      ? 'text-blue-600 bg-blue-100'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>Настройки</span>
+                </Link>
                 <button
                   onClick={() => {
                     handleSignOut();
@@ -201,7 +253,21 @@ const Navigation = () => {
                 </button>
               </div>
             ) : (
-              <div className="border-t border-gray-200 pt-4 mt-4">
+              <div className="border-t border-gray-200 pt-4 mt-4 space-y-2">
+                <Link
+                  href="/privacy"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                >
+                  Поверителност
+                </Link>
+                <Link
+                  href="/terms"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                >
+                  Условия
+                </Link>
                 <Link
                   href="/auth/login"
                   onClick={() => setIsMobileMenuOpen(false)}

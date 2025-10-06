@@ -126,13 +126,37 @@ export default function VerifyReceiptPage() {
   const confirmReceipt = async () => {
     try {
       setSaving(true);
-      // Simulate API call to confirm receipt
-      setTimeout(() => {
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError('Моля, влезте в профила си');
         setSaving(false);
-        router.push('/dashboard');
-      }, 1000);
+        return;
+      }
+
+      // Call the confirm API with edited receipt data
+      const response = await fetch(`/api/receipts/${receiptId}/confirm`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: receipt?.items,
+          totalAmount: receipt?.total_amount
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Грешка при потвърждаване');
+      }
+
+      // Success - redirect to dashboard
+      router.push('/dashboard');
     } catch (err) {
       console.error('Error confirming receipt:', err);
+      setError(err instanceof Error ? err.message : 'Грешка при потвърждаване на касовата бележка');
       setSaving(false);
     }
   };

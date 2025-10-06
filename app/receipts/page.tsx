@@ -1,8 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import dynamic from 'next/dynamic';
 import { createBrowserClient } from '@/lib/supabase-simple';
 import { formatCurrency, formatDate } from '@/lib/utils';
+
+// Lazy load empty state component - only needed when there are no receipts
+const NoReceiptsEmpty = dynamic(() => import('@/components/empty-states/NoReceiptsEmpty'), {
+  ssr: false,
+  loading: () => <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="text-gray-600">Зареждане...</div></div>
+});
 
 interface Receipt {
   id: string;
@@ -264,24 +271,7 @@ export default function ReceiptsPage() {
 
         {/* Empty States */}
         {receipts.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg shadow-sm">
-            <div className="text-6xl mb-4">📸</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Все още няма касови бележки
-            </h3>
-            <p className="text-gray-500 mb-6">
-              Качете първата си касова бележка и започнете да следите разходите си
-            </p>
-            <a
-              href="/upload-receipt"
-              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Качи касова бележка
-            </a>
-          </div>
+          <NoReceiptsEmpty />
         ) : filteredReceipts.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg shadow-sm">
             <div className="text-6xl mb-4">🔍</div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Link from 'next/link';
 
@@ -22,7 +22,9 @@ interface Receipt {
   items: ReceiptItem[];
 }
 
-export default function QuickReviewPage({ params }: { params: { receiptId: string } }) {
+export default function QuickReviewPage() {
+  const params = useParams();
+  const receiptId = params.receiptId as string;
   const router = useRouter();
   const supabase = createClientComponentClient();
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -54,14 +56,14 @@ export default function QuickReviewPage({ params }: { params: { receiptId: strin
 
   useEffect(() => {
     loadReceipt();
-  }, [params.receiptId]);
+  }, [receiptId]);
 
   const loadReceipt = async () => {
     try {
       const { data: receiptData, error: receiptError } = await supabase
         .from('receipts')
         .select('*')
-        .eq('id', params.receiptId)
+        .eq('id', receiptId)
         .single();
 
       if (receiptError) throw receiptError;
@@ -69,7 +71,7 @@ export default function QuickReviewPage({ params }: { params: { receiptId: strin
       const { data: itemsData, error: itemsError } = await supabase
         .from('receipt_items')
         .select('*')
-        .eq('receipt_id', params.receiptId);
+        .eq('receipt_id', receiptId);
 
       if (itemsError) throw itemsError;
 
@@ -116,7 +118,7 @@ export default function QuickReviewPage({ params }: { params: { receiptId: strin
       const { error } = await supabase
         .from('receipts')
         .update({ status: 'completed', reviewed_at: new Date().toISOString() })
-        .eq('id', params.receiptId);
+        .eq('id', receiptId);
 
       if (error) throw error;
 
@@ -156,7 +158,7 @@ export default function QuickReviewPage({ params }: { params: { receiptId: strin
       const { error } = await supabase
         .from('receipts')
         .update({ status: 'completed', reviewed_at: new Date().toISOString() })
-        .eq('id', params.receiptId);
+        .eq('id', receiptId);
 
       if (error) throw error;
 
@@ -284,7 +286,7 @@ export default function QuickReviewPage({ params }: { params: { receiptId: strin
               </button>
 
               <Link
-                href={`/verify-receipt/${params.receiptId}`}
+                href={`/verify-receipt/${receiptId}`}
                 className="w-full bg-white text-gray-700 border-2 border-gray-300 py-3 px-6 rounded-lg font-semibold hover:bg-gray-50 transition-colors flex items-center justify-center"
               >
                 <span className="mr-2">✏️</span>
@@ -404,7 +406,7 @@ export default function QuickReviewPage({ params }: { params: { receiptId: strin
               </button>
 
               <Link
-                href={`/verify-receipt/${params.receiptId}`}
+                href={`/verify-receipt/${receiptId}`}
                 className="w-full bg-white text-gray-700 border-2 border-gray-300 py-3 px-6 rounded-lg font-semibold hover:bg-gray-50 transition-colors flex items-center justify-center"
               >
                 Пълен преглед

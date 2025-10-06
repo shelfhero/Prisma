@@ -3,7 +3,7 @@
  * Comprehensive testing framework for Supabase integration
  */
 
-import { createBrowserClient, createAdminClient } from './supabase-simple';
+import { createBrowserClient } from './supabase-simple';
 import type { Database } from '@/types/database';
 
 export interface TestResult {
@@ -149,7 +149,6 @@ export class PrizmaTestRunner {
 // Database testing utilities
 export class DatabaseTester {
   private supabase = createBrowserClient();
-  private adminClient = createAdminClient();
 
   async testConnection(): Promise<any> {
     const { data, error } = await this.supabase
@@ -293,17 +292,32 @@ export class StorageTester {
       throw new Error(`Грешка при достъп до storage: ${error.message}`);
     }
 
+    const availableBuckets = buckets?.map((b: any) => b.name) || [];
+    const hasReceiptsBucket = availableBuckets.includes('receipts') || availableBuckets.includes('receipt-images');
+
     return {
       bucketsCount: buckets?.length || 0,
-      buckets: buckets?.map((b: any) => b.name) || [],
-      hasReceiptsBucket: buckets?.some((b: any) => b.name === 'receipts') || false
+      buckets: availableBuckets,
+      hasReceiptsBucket,
+      message: hasReceiptsBucket
+        ? 'Storage е достъпен'
+        : 'Предупреждение: Няма receipts bucket'
     };
   }
 
-  async testFileUpload(file: File, path: string): Promise<any> {
+  async testFileUpload(file: File, userId: string): Promise<any> {
+    // Use receipts bucket (more permissive for testing)
+    const bucketName = 'receipts';
+    const testReceiptId = 'test-' + Date.now();
+    const path = `${userId}/${testReceiptId}/test-receipt.png`;
+
     const { data, error } = await this.supabase.storage
-      .from('receipts')
-      .upload(path, file);
+      .from(bucketName)
+      .upload(path, file, {
+        cacheControl: '3600',
+        upsert: true,
+        contentType: 'image/png'
+      });
 
     if (error) {
       throw new Error(`Грешка при качване на файл: ${error.message}`);
@@ -312,13 +326,14 @@ export class StorageTester {
     return {
       uploaded: true,
       path: data.path,
-      fullPath: data.fullPath
+      bucket: bucketName,
+      message: 'Файлът е качен успешно'
     };
   }
 
-  async testFileDownload(path: string): Promise<any> {
+  async testFileDownload(path: string, bucketName: string = 'receipt-images'): Promise<any> {
     const { data, error } = await this.supabase.storage
-      .from('receipts')
+      .from(bucketName)
       .download(path);
 
     if (error) {
@@ -332,44 +347,47 @@ export class StorageTester {
     };
   }
 
-  // Create a test file for upload testing
+  // Create a test PNG image file for upload testing
   createTestFile(): File {
-    const content = JSON.stringify({
-      test: true,
-      timestamp: new Date().toISOString(),
-      message: 'Тестов файл за Призма'
+    // Create a minimal 1x1 PNG image (base64 decoded)
+    const pngData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const byteString = atob(pngData);
+    const arrayBuffer = new ArrayBuffer(byteString.length);
+    const uint8Array = new Uint8Array(arrayBuffer);
+
+    for (let i = 0; i < byteString.length; i++) {
+      uint8Array[i] = byteString.charCodeAt(i);
+    }
+
+    const file = new File([uint8Array], 'test-receipt.png', {
+      type: 'image/png'
     });
 
-    return new File([content], 'test-receipt.json', {
-      type: 'application/json'
-    });
+    console.log('[StorageTester] Created test file:', file.name, file.type, file.size);
+    return file;
   }
 }
 
 // Receipt flow testing utilities
 export class ReceiptFlowTester {
   private supabase = createBrowserClient();
-  private adminClient = createAdminClient();
 
   async createTestReceipt(userId: string): Promise<any> {
-    // First, ensure we have test categories and retailers
-    const { data: category } = await this.adminClient
+    // Get existing category or use null (categories are pre-populated)
+    const { data: categories } = await this.supabase
       .from('categories')
-      .upsert({
-        name: 'Тестова категория',
-        description: 'Категория за тестване'
-      }, { onConflict: 'name' })
       .select()
-      .single();
+      .limit(1);
 
-    const { data: retailer } = await this.adminClient
+    const category = categories?.[0] || null;
+
+    // Get existing retailer or use null (retailers can be pre-populated)
+    const { data: retailers } = await this.supabase
       .from('retailers')
-      .upsert({
-        name: 'Тестов магазин',
-        address: 'Тестов адрес'
-      }, { onConflict: 'name' })
       .select()
-      .single();
+      .limit(1);
+
+    const retailer = retailers?.[0] || null;
 
     // Create test receipt
     const { data: receipt, error: receiptError } = await this.supabase
@@ -380,7 +398,7 @@ export class ReceiptFlowTester {
         total_amount: 25.50,
         currency: 'BGN',
         purchased_at: new Date().toISOString(),
-        raw_text: 'Тестова бележка\nПродукт 1: 10.00 лв\nПродукт 2: 15.50 лв'
+        processing_status: 'completed'
       })
       .select()
       .single();
@@ -397,15 +415,17 @@ export class ReceiptFlowTester {
           receipt_id: receipt.id,
           product_name: 'Тестов продукт 1',
           category_id: category?.id,
-          price: 10.00,
-          quantity: 1
+          unit_price: 10.00,
+          total_price: 10.00,
+          qty: 1
         },
         {
           receipt_id: receipt.id,
           product_name: 'Тестов продукт 2',
           category_id: category?.id,
-          price: 15.50,
-          quantity: 1
+          unit_price: 15.50,
+          total_price: 15.50,
+          qty: 1
         }
       ])
       .select();
@@ -432,7 +452,7 @@ export class ReceiptFlowTester {
         currency,
         purchased_at,
         retailer:retailers(name),
-        items(id, product_name, price, category:categories(name))
+        items(id, product_name, unit_price, total_price, qty, category:categories(name))
       `)
       .eq('user_id', userId)
       .order('purchased_at', { ascending: false });
@@ -449,12 +469,36 @@ export class ReceiptFlowTester {
   }
 
   async cleanupTestData(userId: string): Promise<any> {
-    // Delete test receipts and related data
+    const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    // First, get the receipt IDs to delete
+    const { data: receiptsToDelete } = await this.supabase
+      .from('receipts')
+      .select('id')
+      .eq('user_id', userId)
+      .gte('created_at', cutoffDate);
+
+    if (!receiptsToDelete || receiptsToDelete.length === 0) {
+      return {
+        cleaned: true,
+        message: 'Няма тестови данни за изчистване'
+      };
+    }
+
+    const receiptIds = receiptsToDelete.map(r => r.id);
+
+    // Delete items first (child records)
+    await this.supabase
+      .from('items')
+      .delete()
+      .in('receipt_id', receiptIds);
+
+    // Then delete receipts (parent records)
     const { error: deleteError } = await this.supabase
       .from('receipts')
       .delete()
       .eq('user_id', userId)
-      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Delete receipts created in last 24h
+      .gte('created_at', cutoffDate);
 
     if (deleteError) {
       throw new Error(`Грешка при изчистване на тестови данни: ${deleteError.message}`);
@@ -463,6 +507,179 @@ export class ReceiptFlowTester {
     return {
       cleaned: true,
       message: 'Тестовите данни са изчистени успешно'
+    };
+  }
+}
+
+// Comprehensive cleanup utilities
+export class TestDataCleanup {
+  private supabase = createBrowserClient();
+
+  /**
+   * Remove test receipts created in the last 24 hours for the current user
+   */
+  async cleanupTestReceipts(userId: string): Promise<any> {
+    const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    // Get test receipts
+    const { data: receipts, error: fetchError } = await this.supabase
+      .from('receipts')
+      .select('id')
+      .eq('user_id', userId)
+      .gte('created_at', cutoffDate);
+
+    if (fetchError) {
+      throw new Error(`Грешка при намиране на тестови бележки: ${fetchError.message}`);
+    }
+
+    if (!receipts || receipts.length === 0) {
+      return {
+        deleted: 0,
+        message: 'Няма тестови бележки за изчистване'
+      };
+    }
+
+    // Delete items first (foreign key constraint)
+    const receiptIds = receipts.map(r => r.id);
+    const { error: itemsError } = await this.supabase
+      .from('items')
+      .delete()
+      .in('receipt_id', receiptIds);
+
+    if (itemsError) {
+      console.warn('Грешка при изтриване на артикули:', itemsError.message);
+    }
+
+    // Delete receipts
+    const { error: receiptsError } = await this.supabase
+      .from('receipts')
+      .delete()
+      .in('id', receiptIds);
+
+    if (receiptsError) {
+      throw new Error(`Грешка при изтриване на бележки: ${receiptsError.message}`);
+    }
+
+    return {
+      deleted: receipts.length,
+      message: `Изтрити ${receipts.length} тестови бележки`
+    };
+  }
+
+  /**
+   * Remove test files from storage
+   */
+  async cleanupTestFiles(userId: string): Promise<any> {
+    const { data: files, error: listError } = await this.supabase.storage
+      .from('receipts')
+      .list(userId);
+
+    if (listError) {
+      throw new Error(`Грешка при намиране на тестови файлове: ${listError.message}`);
+    }
+
+    if (!files || files.length === 0) {
+      return {
+        deleted: 0,
+        message: 'Няма тестови файлове за изчистване'
+      };
+    }
+
+    // Filter test files (created in last 24h)
+    const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const testFiles = files.filter(f => {
+      const fileDate = new Date(f.created_at);
+      return fileDate > cutoffDate && f.name.includes('test');
+    });
+
+    if (testFiles.length === 0) {
+      return {
+        deleted: 0,
+        message: 'Няма тестови файлове за изчистване'
+      };
+    }
+
+    const filePaths = testFiles.map(f => `${userId}/${f.name}`);
+    const { error: deleteError } = await this.supabase.storage
+      .from('receipts')
+      .remove(filePaths);
+
+    if (deleteError) {
+      throw new Error(`Грешка при изтриване на файлове: ${deleteError.message}`);
+    }
+
+    return {
+      deleted: testFiles.length,
+      message: `Изтрити ${testFiles.length} тестови файлове`
+    };
+  }
+
+  /**
+   * Cleanup all test data for current user
+   */
+  async cleanupAll(userId: string): Promise<any> {
+    const results = {
+      receipts: { deleted: 0, message: '' },
+      files: { deleted: 0, message: '' },
+      errors: [] as string[]
+    };
+
+    // Cleanup receipts
+    try {
+      results.receipts = await this.cleanupTestReceipts(userId);
+    } catch (error: any) {
+      results.errors.push(`Бележки: ${error.message}`);
+    }
+
+    // Cleanup files
+    try {
+      results.files = await this.cleanupTestFiles(userId);
+    } catch (error: any) {
+      results.errors.push(`Файлове: ${error.message}`);
+    }
+
+    const totalDeleted = results.receipts.deleted + results.files.deleted;
+
+    return {
+      ...results,
+      totalDeleted,
+      success: results.errors.length === 0,
+      message: totalDeleted > 0
+        ? `Успешно изчистени ${totalDeleted} тестови записа`
+        : 'Няма тестови данни за изчистване'
+    };
+  }
+
+  /**
+   * Delete test user account (requires API endpoint)
+   * This cannot be done from client side - needs admin privileges
+   */
+  async deleteTestUser(email: string): Promise<any> {
+    // This needs to be done via an API endpoint with service role key
+    console.log('[TestDataCleanup] Calling delete user API for:', email);
+
+    const response = await fetch('/api/test/cleanup-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email })
+    });
+
+    console.log('[TestDataCleanup] API response status:', response.status);
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('[TestDataCleanup] API error:', error);
+      throw new Error(error.error || error.message || 'Грешка при изтриване на потребител');
+    }
+
+    const data = await response.json();
+    console.log('[TestDataCleanup] API success:', data);
+
+    return {
+      deleted: true,
+      message: data.message || `Потребител ${email} е изтрит успешно`
     };
   }
 }

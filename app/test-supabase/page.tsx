@@ -14,6 +14,7 @@ import PrizmaTestRunner, {
   AuthTester,
   StorageTester,
   ReceiptFlowTester,
+  TestDataCleanup,
   TestSuite,
   TestResult
 } from '@/lib/test-utils';
@@ -25,6 +26,9 @@ export default function SupabaseTestPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [currentTest, setCurrentTest] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [cleanupResult, setCleanupResult] = useState<string | null>(null);
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
+  const [testUserExists, setTestUserExists] = useState<boolean>(false);
 
   // Test credentials for registration/login tests
   const [testEmail, setTestEmail] = useState('test@prizma.bg');
@@ -35,6 +39,7 @@ export default function SupabaseTestPage() {
   const authTester = new AuthTester();
   const storageTester = new StorageTester();
   const receiptTester = new ReceiptFlowTester();
+  const cleanup = new TestDataCleanup();
 
   const updateCurrentTest = (testName: string) => {
     setCurrentTest(testName);
@@ -100,12 +105,13 @@ export default function SupabaseTestPage() {
         return await storageTester.testBucketAccess();
       });
 
-      await runner.runTest('Качване на тестов файл', async () => {
-        updateCurrentTest('Качване на тестов файл...');
-        const testFile = storageTester.createTestFile();
-        const testPath = `test-uploads/test-${Date.now()}.json`;
-        return await storageTester.testFileUpload(testFile, testPath);
-      });
+      if (user) {
+        await runner.runTest('Качване на тестов файл', async () => {
+          updateCurrentTest('Качване на тестов файл...');
+          const testFile = storageTester.createTestFile();
+          return await storageTester.testFileUpload(testFile, user.id);
+        });
+      }
 
       const storageSuite = runner.finishSuite();
       setTestResults(prev => [...prev, storageSuite]);
@@ -165,6 +171,64 @@ export default function SupabaseTestPage() {
     link.download = `prizma-test-report-${new Date().toISOString().slice(0, 19)}.txt`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleCleanupTestData = async () => {
+    if (!user) {
+      setCleanupResult('❌ Трябва да сте автентикиран за да изчистите данни');
+      return;
+    }
+
+    setIsCleaningUp(true);
+    setCleanupResult(null);
+
+    try {
+      const result = await cleanup.cleanupAll(user.id);
+
+      if (result.success) {
+        setCleanupResult(`✅ ${result.message}\n• Бележки: ${result.receipts.deleted}\n• Файлове: ${result.files.deleted}`);
+      } else {
+        setCleanupResult(`⚠️ Частично изчистване:\n${result.errors.join('\n')}`);
+      }
+    } catch (error: any) {
+      setCleanupResult(`❌ Грешка: ${error.message}`);
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
+  const checkTestUserExists = async () => {
+    try {
+      const response = await fetch('/api/test/check-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: testEmail })
+      });
+      const data = await response.json();
+      setTestUserExists(data.exists || false);
+    } catch (error) {
+      console.error('Error checking user:', error);
+      setTestUserExists(false);
+    }
+  };
+
+  const handleDeleteTestUser = async () => {
+    if (!confirm(`Сигурни ли сте, че искате да изтриете тестовия потребител ${testEmail}?\n\nТова действие е необратимо!`)) {
+      return;
+    }
+
+    setIsCleaningUp(true);
+    setCleanupResult(null);
+
+    try {
+      const result = await cleanup.deleteTestUser(testEmail);
+      setCleanupResult(`✅ ${result.message}`);
+      setTestUserExists(false); // Update state after deletion
+    } catch (error: any) {
+      setCleanupResult(`❌ Грешка: ${error.message}`);
+    } finally {
+      setIsCleaningUp(false);
+    }
   };
 
   if (authLoading) {
@@ -405,6 +469,59 @@ export default function SupabaseTestPage() {
             </div>
           </div>
         ))}
+
+        {/* Cleanup Tools */}
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">
+            🧹 Инструменти за изчистване
+          </h3>
+
+          <div className="space-y-4">
+            {/* Cleanup test data */}
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex-1">
+                <h4 className="font-medium text-gray-900">Изчистване на тестови данни</h4>
+                <p className="text-sm text-gray-600 mt-1">
+                  Изтрива всички тестови бележки и файлове създадени през последните 24 часа
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={handleCleanupTestData}
+                disabled={isCleaningUp || !user}
+                className="ml-4"
+              >
+                {isCleaningUp ? 'Изчистване...' : 'Изчисти данни'}
+              </Button>
+            </div>
+
+            {/* Delete test user */}
+            <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+              <div className="flex-1">
+                <h4 className="font-medium text-yellow-900">Изтриване на тестов потребител</h4>
+                <p className="text-sm text-yellow-700 mt-1">
+                  За да тествате регистрацията отново, променете тестовия email на нов (напр. test2@prizma.bg, test3@prizma.bg)
+                  или използвайте Supabase Dashboard за да изтриете ръчно потребителя {testEmail}
+                </p>
+              </div>
+            </div>
+
+            {/* Cleanup result */}
+            {cleanupResult && (
+              <div className={`p-4 rounded-lg ${
+                cleanupResult.startsWith('✅')
+                  ? 'bg-green-50 border border-green-200'
+                  : cleanupResult.startsWith('⚠️')
+                  ? 'bg-yellow-50 border border-yellow-200'
+                  : 'bg-red-50 border border-red-200'
+              }`}>
+                <pre className="text-sm whitespace-pre-wrap font-mono">
+                  {cleanupResult}
+                </pre>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Bulgarian Text Test */}
         <BulgarianTextTest />

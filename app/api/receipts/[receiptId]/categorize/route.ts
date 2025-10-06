@@ -17,10 +17,10 @@ const CATEGORY_MAPPING = {
 // POST - Save categorized items to budget or update individual item category
 export async function POST(
   request: NextRequest,
-  { params }: { params: { receiptId: string } }
+  { params }: { params: Promise<{ receiptId: string }> }
 ) {
   try {
-    const { receiptId } = params;
+    const { receiptId } = await params;
     const body = await request.json();
 
     // Check if this is a single item category update
@@ -221,10 +221,10 @@ function getCategoryColor(categoryKey: string): string {
 // GET - Get categorization status and summary
 export async function GET(
   request: NextRequest,
-  { params }: { params: { receiptId: string } }
+  { params }: { params: Promise<{ receiptId: string }> }
 ) {
   try {
-    const { receiptId } = params;
+    const { receiptId } = await params;
 
     // Get user from auth header
     const authHeader = request.headers.get('authorization');

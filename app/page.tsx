@@ -5,11 +5,11 @@
  * Landing page with authentication redirect
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function HomePage() {
   const { user, loading } = useAuth();
@@ -22,8 +22,8 @@ export default function HomePage() {
     }
   }, [user, loading, router]);
 
-  // Show loading while checking auth
-  if (loading) {
+  // Show loading while checking auth OR if user is authenticated (to prevent flash)
+  if (loading || user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">

@@ -15,21 +15,21 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
  * Client-side Supabase client with proper SSR support
  * Use this in React components and client-side code
  */
+// Singleton client to avoid recreating on every call
+let browserClientInstance: any = null;
+
 export const createBrowserClient = () => {
+  // Return cached instance if available
+  if (browserClientInstance) {
+    return browserClientInstance;
+  }
+
   // Detailed error messages for debugging
   if (!supabaseUrl || supabaseUrl.trim() === '') {
-    console.error('Environment check failed:');
-    console.error('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl);
-    console.error('All env vars:', {
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-      key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET'
-    });
     throw new Error('NEXT_PUBLIC_SUPABASE_URL е задължителна променлива. Проверете .env.local файла.');
   }
 
   if (!supabaseAnonKey || supabaseAnonKey.trim() === '') {
-    console.error('Environment check failed:');
-    console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'SET' : 'NOT SET');
     throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY е задължителна променлива. Проверете .env.local файла.');
   }
 
@@ -38,7 +38,7 @@ export const createBrowserClient = () => {
     if (typeof window !== 'undefined') {
       const { createBrowserClient: createSSRBrowserClient } = require('@supabase/ssr');
 
-      return (createSSRBrowserClient as any)(supabaseUrl, supabaseAnonKey, {
+      browserClientInstance = (createSSRBrowserClient as any)(supabaseUrl, supabaseAnonKey, {
         cookies: {
           get(name: string) {
             const value = document.cookie
@@ -64,13 +64,10 @@ export const createBrowserClient = () => {
         global: {
           headers: {
             'X-Client-Info': 'Prizma-Web-App',
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
           },
           fetch: (url: any, options: any = {}) => {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
 
             return fetch(url, {
               ...options,
@@ -79,10 +76,12 @@ export const createBrowserClient = () => {
           }
         }
       });
+
+      return browserClientInstance;
     }
 
     // Fallback for server-side rendering
-    return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    browserClientInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
@@ -91,21 +90,11 @@ export const createBrowserClient = () => {
       global: {
         headers: {
           'X-Client-Info': 'Prizma-Web-App',
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
-        },
-        fetch: (url, options = {}) => {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-
-          return fetch(url, {
-            ...options,
-            signal: controller.signal
-          }).finally(() => clearTimeout(timeoutId));
         }
       }
     });
+
+    return browserClientInstance;
   } catch (error: any) {
     console.error('Failed to create Supabase client:', error);
     throw new Error(`Грешка при създаване на Supabase клиент: ${error.message}`);

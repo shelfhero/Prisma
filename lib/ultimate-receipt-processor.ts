@@ -154,6 +154,11 @@ CRITICAL REQUIREMENTS:
 1. TOTAL AMOUNT: Must be 100% accurate. Look for "ОБЩА СУМА", "ВСИЧКО", "TOTAL" - this is usually the largest number
 2. STORE NAME: Must be 100% accurate. Usually at the top (Лидл, Билла, Кауфланд, etc.)
 3. DATE: Must be 100% accurate. Format: YYYY-MM-DD
+   - Look for "ДАТА:", "DATE:", "Дата", or dates near timestamps
+   - Bulgarian format is DD.MM.YYYY (day.month.year)
+   - Examples: "01.10.2025" = October 1, 2025, "30.09.2025" = September 30, 2025
+   - ALWAYS use the EXACT date from the receipt, not today's date
+   - Double-check: month 01=January, 02=February, ..., 09=September, 10=October, 11=November, 12=December
 
 ${isLidl ? `
 SPECIAL LIDL RECEIPT RULES:
@@ -511,47 +516,186 @@ EXTRACT ALL ITEMS - aim for 25-35 items for a typical LIDL receipt. Be thorough!
   private extractDateFromRawText(text: string): string {
     const lines = text.split('\n');
 
-    // Bulgarian date patterns
-    const datePatterns = [
-      /(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/, // DD.MM.YYYY or DD/MM/YY
-      /(\d{2,4})[.\/-](\d{1,2})[.\/-](\d{1,2})/, // YYYY.MM.DD
-    ];
+    console.log('🔍 Starting ENHANCED date extraction...');
+    console.log('📄 Full text preview:', text.substring(0, 500));
 
-    for (const line of lines) {
-      for (const pattern of datePatterns) {
-        const match = line.match(pattern);
-        if (match) {
-          try {
-            let [, part1, part2, part3] = match;
+    // PRIORITY 1: Look for explicit "ДАТА:" or "DATE:" patterns (HIGHEST PRIORITY)
+    // Bulgarian receipts clearly mark dates with "ДАТА:" or "Дата:"
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
 
-            // Try DD.MM.YYYY format first (most common in Bulgaria)
-            const day = parseInt(part1);
-            const month = parseInt(part2);
-            let year = parseInt(part3);
+      // Match "ДАТА:" followed by a date in various formats
+      const bulgDatePattern = /(?:ДАТА|Дата|дата)\s*[:;.,]?\s*(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/i;
+      const match = line.match(bulgDatePattern);
 
-            // Handle 2-digit years
-            if (year < 100) {
-              year = year < 50 ? 2000 + year : 1900 + year;
-            }
+      if (match) {
+        const day = parseInt(match[1]);
+        const month = parseInt(match[2]);
+        let year = parseInt(match[3]);
 
-            // Validate date components
-            if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 2020 && year <= 2030) {
-              const date = new Date(year, month - 1, day);
-              if (!isNaN(date.getTime())) {
-                const isoDate = date.toISOString().split('T')[0];
-                console.log(`📅 Found date: ${isoDate} from line: "${line.trim()}"`);
-                return isoDate;
-              }
-            }
-          } catch (e) {
-            continue;
-          }
+        // Handle 2-digit years
+        if (year < 100) {
+          year = year < 50 ? 2000 + year : 1900 + year;
+        }
+
+        // Validate
+        if (this.isValidDate(day, month, year)) {
+          const date = new Date(year, month - 1, day);
+          const isoDate = date.toISOString().split('T')[0];
+          console.log(`📅 ✅ Found BULGARIAN date pattern "ДАТА:": ${isoDate} from line: "${line.trim()}"`);
+          return isoDate;
         }
       }
     }
 
+    // PRIORITY 2: Look for dates near date/time keywords
+    const dateKeywords = /ДАТА|DATE|Дата|дата/i;
+    const timeKeywords = /ВРЕМЕ|TIME|ЧАС|време|час/i;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const prevLine = i > 0 ? lines[i - 1] : '';
+      const nextLine = i < lines.length - 1 ? lines[i + 1] : '';
+
+      // Check if this line or adjacent lines contain date keywords
+      const hasDateKeyword = dateKeywords.test(line) || dateKeywords.test(prevLine) || dateKeywords.test(nextLine);
+      const hasTimeKeyword = timeKeywords.test(line) || timeKeywords.test(prevLine) || timeKeywords.test(nextLine);
+
+      if (hasDateKeyword || hasTimeKeyword) {
+        // Try all date patterns with context
+        const contextLines = [prevLine, line, nextLine].join(' ');
+        const date = this.parseAllDateFormats(contextLines, true);
+        if (date) {
+          console.log(`📅 Found date with CONTEXT: ${date} from "${line.trim()}"`);
+          return date;
+        }
+      }
+    }
+
+    // PRIORITY 2: Look for dates in the first 15 lines (header section)
+    console.log('🔍 Searching in header section (first 15 lines)...');
+    for (let i = 0; i < Math.min(15, lines.length); i++) {
+      const date = this.parseAllDateFormats(lines[i], false);
+      if (date) {
+        console.log(`📅 Found date in header: ${date} from line ${i}: "${lines[i].trim()}"`);
+        return date;
+      }
+    }
+
+    // PRIORITY 3: Search entire text for any valid date
+    console.log('🔍 Searching entire text...');
+    for (const line of lines) {
+      const date = this.parseAllDateFormats(line, false);
+      if (date) {
+        console.log(`📅 Found date in body: ${date} from "${line.trim()}"`);
+        return date;
+      }
+    }
+
     // Fallback to today's date
-    return new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+    console.log(`⚠️  No date found in text, using today: ${today}`);
+    return today;
+  }
+
+  /**
+   * Validate if a date is valid
+   */
+  private isValidDate(day: number, month: number, year: number): boolean {
+    // Year must be reasonable (2020-2030)
+    if (year < 2020 || year > 2030) {
+      console.log(`⚠️  Invalid year: ${year}`);
+      return false;
+    }
+
+    // Month must be 1-12
+    if (month < 1 || month > 12) {
+      console.log(`⚠️  Invalid month: ${month}`);
+      return false;
+    }
+
+    // Day must be valid for that month
+    const daysInMonth = new Date(year, month, 0).getDate();
+    if (day < 1 || day > daysInMonth) {
+      console.log(`⚠️  Invalid day ${day} for month ${month} (max ${daysInMonth})`);
+      return false;
+    }
+
+    // Date must not be in the future (allow up to tomorrow for timezone differences)
+    const parsedDate = new Date(year, month - 1, day);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(23, 59, 59, 999);
+
+    if (parsedDate > tomorrow) {
+      console.log(`⚠️  Rejecting future date: ${parsedDate.toISOString().split('T')[0]}`);
+      return false;
+    }
+
+    // Date must not be too old (> 1 year)
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+    if (parsedDate < oneYearAgo) {
+      console.log(`⚠️  Rejecting old date (>1 year): ${parsedDate.toISOString().split('T')[0]}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Parse all possible date formats with strict validation
+   */
+  private parseAllDateFormats(text: string, requireContext: boolean): string | null {
+    // All possible date patterns for Bulgarian receipts
+    const patterns = [
+      // DD.MM.YYYY (most common in Bulgaria)
+      { regex: /\b(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})\b/, format: 'DMY' },
+      // DD.MM.YY
+      { regex: /\b(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2})\b/, format: 'DMY' },
+      // YYYY-MM-DD (ISO format)
+      { regex: /\b(\d{4})[.\/-](\d{1,2})[.\/-](\d{1,2})\b/, format: 'YMD' },
+      // DD/MM/YYYY or DD-MM-YYYY
+      { regex: /\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})\b/, format: 'DMY' },
+      // Spaced dates: DD . MM . YYYY
+      { regex: /(\d{1,2})\s*[.]\s*(\d{1,2})\s*[.]\s*(\d{2,4})/, format: 'DMY' },
+    ];
+
+    for (const { regex, format } of patterns) {
+      const match = text.match(regex);
+      if (!match) continue;
+
+      try {
+        let day: number, month: number, year: number;
+
+        if (format === 'DMY') {
+          day = parseInt(match[1]);
+          month = parseInt(match[2]);
+          year = parseInt(match[3]);
+        } else { // YMD
+          year = parseInt(match[1]);
+          month = parseInt(match[2]);
+          day = parseInt(match[3]);
+        }
+
+        // Handle 2-digit years
+        if (year < 100) {
+          year = year < 50 ? 2000 + year : 1900 + year;
+        }
+
+        // Validate
+        if (this.isValidDate(day, month, year)) {
+          const parsedDate = new Date(year, month - 1, day);
+          const isoDate = parsedDate.toISOString().split('T')[0];
+          return isoDate;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+
+    return null;
   }
 
   /**

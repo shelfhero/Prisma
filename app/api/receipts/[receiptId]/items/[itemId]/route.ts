@@ -4,10 +4,10 @@ import { createServerClient } from '@/lib/supabase-simple';
 // PUT - Update item details
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { receiptId: string; itemId: string } }
+  { params }: { params: Promise<{ receiptId: string; itemId: string }> }
 ) {
   try {
-    const { receiptId, itemId } = params;
+    const { receiptId, itemId } = await params;
     const { product_name, price, quantity } = await request.json();
 
     // Get user from auth header

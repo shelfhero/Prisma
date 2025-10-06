@@ -5,10 +5,10 @@
  * Engaging feature hub showing personalized overview, quick actions, insights, and recent activity
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import dynamic from 'next/dynamic';
 import { createBrowserClient } from '@/lib/supabase-simple';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -31,6 +31,11 @@ import {
   Heart,
   Calendar
 } from 'lucide-react';
+
+// Lazy load ProtectedRoute since it's a wrapper component
+const ProtectedRoute = dynamic(() => import('@/components/auth/ProtectedRoute'), {
+  ssr: true,
+});
 
 // Types
 interface DashboardData {

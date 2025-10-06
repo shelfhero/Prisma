@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { createServerClient } from './supabase-simple';
+import { getCategoryFromCache, normalizeProductName as normalizeBulgarianProduct } from './bulgarian-product-cache';
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -373,7 +374,19 @@ export async function categorizeProduct(
 ): Promise<CategorizationResult> {
   console.log(`[Categorization] Processing: "${productName}"`, { storeName, userId });
 
-  // 1. Check user corrections first (highest priority)
+  // 0. Check Bulgarian product cache FIRST (INSTANT - saves 2-3 seconds!)
+  const cachedCategory = getCategoryFromCache(productName);
+  if (cachedCategory) {
+    console.log(`[Categorization] ⚡ INSTANT Cache hit: "${productName}" → ${cachedCategory}`);
+    return {
+      category_id: cachedCategory.toLowerCase().replace(/\s+/g, '_'),
+      category_name: cachedCategory,
+      confidence: 1.0, // Cache is 100% confident
+      method: 'cache',
+    };
+  }
+
+  // 1. Check user corrections (highest priority for learning)
   if (userId) {
     const userCorrection = await getUserCorrection(productName, userId);
     if (userCorrection) {
@@ -396,7 +409,7 @@ export async function categorizeProduct(
     return storeResult;
   }
 
-  // 4. Try AI categorization
+  // 4. Try AI categorization (slowest, last resort)
   const aiResult = await categorizeByAI(productName);
   if (aiResult && aiResult.confidence >= 0.6) {
     console.log(`[Categorization] AI match found:`, aiResult);
