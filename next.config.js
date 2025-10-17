@@ -94,6 +94,12 @@ const nextConfig = {
   // Enable React concurrent features for better performance
   reactStrictMode: true,
 
+  // TypeScript configuration
+  typescript: {
+    // Enable type checking during build
+    ignoreBuildErrors: false,
+  },
+
   // Keep heavy server packages out of client bundle (Next.js 15+)
   serverExternalPackages: [
     '@google-cloud/vision',
