@@ -417,6 +417,15 @@ async function saveReceiptToDatabase(
   // Get or create retailer
   const retailerId = await getOrCreateRetailer(receipt.retailer || 'Неизвестен магазин');
 
+  // Import product normalization service
+  let ProductNormalizationService: any = null;
+  try {
+    const normModule = await import('@/lib/services/product-normalization');
+    ProductNormalizationService = normModule.ProductNormalizationService;
+  } catch (error) {
+    console.warn('Product normalization service not available:', error);
+  }
+
   // Prepare receipt data
   const totalAmount = receipt.total || 0;
   const purchasedAt = receipt.date || new Date().toISOString();
@@ -473,8 +482,17 @@ async function saveReceiptToDatabase(
     if (!item.name || !item.price) continue;
 
     const quantity = item.quantity || 1;
-    const unitPrice = item.price; // Use item price as unit price
-    const totalPrice = item.price; // Always use the total price from receipt
+    // CRITICAL FIX: item.price is the TOTAL price for this line item
+    const totalPrice = item.price;
+    // Calculate or use the provided unit price
+    const unitPrice = (item as any).unitPrice || (totalPrice / quantity);
+
+    // Validate calculation is correct (within 0.01 tolerance for rounding)
+    const calculatedTotal = unitPrice * quantity;
+    if (Math.abs(calculatedTotal - totalPrice) > 0.01) {
+      console.warn(`⚠️  Item "${item.name}" calculation mismatch: ${quantity} × ${unitPrice} = ${calculatedTotal}, but totalPrice = ${totalPrice}`);
+      console.warn(`   This may indicate an OCR error`);
+    }
 
     // Use new categorization engine data if available, otherwise fall back to old method
     let categoryId = item.category_id || null;
@@ -491,7 +509,35 @@ async function saveReceiptToDatabase(
       categoryConfidence = 0.5;
     }
 
-    const { error: itemError } = await supabase
+    // Product normalization - get or create master product
+    let masterProductId: number | null = null;
+    let normalizationConfidence = 0;
+
+    if (ProductNormalizationService) {
+      try {
+        // Get retailer ID for normalization
+        const retailerIdForNorm = await ProductNormalizationService.getRetailerByName(
+          receipt.retailer || 'Неизвестен магазин'
+        );
+
+        const normResult = await ProductNormalizationService.getOrCreateMasterProduct(
+          item.name,
+          categoryId || undefined,
+          retailerIdForNorm
+        );
+
+        if (normResult.success) {
+          masterProductId = normResult.master_product_id;
+          normalizationConfidence = normResult.confidence_score;
+
+          console.log(`   ✅ Normalized "${item.name}" -> master_product_id: ${masterProductId} (${Math.round(normalizationConfidence * 100)}%)`);
+        }
+      } catch (normError) {
+        console.warn(`   ⚠️ Normalization failed for "${item.name}":`, normError);
+      }
+    }
+
+    const { data: insertedItem, error: itemError } = await supabase
       .from('items')
       .insert({
         receipt_id: receiptId,
@@ -503,14 +549,43 @@ async function saveReceiptToDatabase(
         category_id: categoryId,
         category_name: categoryName,
         category_confidence: categoryConfidence,
-        category_method: categoryMethod
-      });
+        category_method: categoryMethod,
+        master_product_id: masterProductId,
+        raw_product_name: item.name,
+        confidence_score: normalizationConfidence
+      })
+      .select('id')
+      .single();
 
     if (itemError) {
       console.error('Item insert failed:', itemError);
       // Continue with other items
     } else {
       itemsInserted++;
+
+      // Record price in price history
+      if (masterProductId && ProductNormalizationService && insertedItem) {
+        try {
+          const retailerIdForPrice = await ProductNormalizationService.getRetailerByName(
+            receipt.retailer || 'Неизвестен магазин'
+          );
+
+          await ProductNormalizationService.recordPrice(
+            masterProductId,
+            retailerIdForPrice,
+            unitPrice,
+            {
+              totalPrice,
+              quantity,
+              receiptId
+            }
+          );
+
+          console.log(`   💰 Recorded price: ${unitPrice} лв for master_product_id: ${masterProductId}`);
+        } catch (priceError) {
+          console.warn(`   ⚠️ Price recording failed:`, priceError);
+        }
+      }
     }
   }
 

@@ -45,7 +45,14 @@
       "Bash(done)",
       "Bash(npx next build:*)",
       "Bash(npx kill-port:*)",
-      "Bash(npx @sentry/wizard@latest:*)"
+      "Bash(npx @sentry/wizard@latest:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npx dotenv-cli -e .env.local -- npx tsx scripts/backfill-product-normalization.ts:*)",
+      "Bash(start http://localhost:3001/price-comparison)",
+      "Bash(npm run migrate:check:*)",
+      "Bash(npm run migrate:fix-categories:*)",
+      "Bash(npx dotenv-cli:*)",
+      "Bash(start http://localhost:3000/price-comparison)"
     ],
     "deny": [],
     "ask": []

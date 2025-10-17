@@ -561,13 +561,13 @@ function DashboardContent() {
 
           {/* Analytics */}
           <Card className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-purple-200">
-            <Link href="/receipts">
+            <Link href="/analytics">
               <div className="p-6">
                 <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                   <BarChart3 className="w-6 h-6 text-white" />
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-2">📊 АНАЛИЗИ</h3>
-                <p className="text-gray-600 mb-2">Подробни отчети и тенденции в разходите</p>
+                <p className="text-gray-600 mb-2">AI препоръки и smart insights за спестяване</p>
                 {!data.isNewUser && (
                   <p className="text-sm font-semibold text-purple-600 mb-4">
                     {data.insights.totalReceipts} обработени бона

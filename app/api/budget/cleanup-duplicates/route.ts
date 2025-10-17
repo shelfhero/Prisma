@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     console.log('Cleaning up duplicate budget lines for user:', user.id);
 
     // Get all budget_lines for this user's budgets
-    const { data: budgets } = await supabase
+    const { data: budgets } = await (supabase as any)
       .from('budgets')
       .select('id')
       .eq('user_id', user.id);
@@ -30,10 +30,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'No budgets found', deleted: 0 });
     }
 
-    const budgetIds = budgets.map(b => b.id);
+    const budgetIds = budgets.map((b: any) => b.id);
 
     // Get all budget lines for these budgets
-    const { data: allLines } = await supabase
+    const { data: allLines } = await (supabase as any)
       .from('budget_lines')
       .select('*')
       .in('budget_id', budgetIds)
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const linesToKeep = new Map<string, number>();
     const linesToDelete: number[] = [];
 
-    allLines.forEach(line => {
+    allLines.forEach((line: any) => {
       const key = `${line.budget_id}-${line.category_id}`;
 
       if (!linesToKeep.has(key)) {
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Delete the duplicates
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await (supabase as any)
       .from('budget_lines')
       .delete()
       .in('id', linesToDelete);

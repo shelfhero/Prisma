@@ -177,6 +177,13 @@ FOR ITEMS - EXTRACT EVERY SINGLE ONE:
 - Ignore obvious artifacts like "лв", "Fi", "G", "B", numbers without context
 - Include items like: СЛАДОЛЕД, КАФЕ, ХЛЯБ, МАСЛО, МЕСО, ПЛОДОВЕ, ЗЕЛЕНЧУЦИ, etc.
 
+CRITICAL PRICE REQUIREMENTS:
+- "totalPrice" = the TOTAL price for that line (what customer pays for all units of that item)
+- "unitPrice" = price per SINGLE unit (totalPrice ÷ quantity)
+- "quantity" = number of units purchased
+- ALWAYS ensure: unitPrice × quantity = totalPrice (basic math!)
+- For single items (qty=1), unitPrice = totalPrice
+
 RAW OCR TEXT AVAILABLE:
 ${rawText.substring(0, 2000)}...
 
@@ -195,6 +202,11 @@ Return this EXACT JSON structure:
   ],
   "confidence": 95
 }
+
+EXAMPLE: If receipt shows "2.000 × 7.49 = 14.98":
+- quantity: 2
+- unitPrice: 7.49
+- totalPrice: 14.98
 
 EXTRACT ALL ITEMS - aim for 25-35 items for a typical LIDL receipt. Be thorough!`;
 
@@ -250,7 +262,7 @@ EXTRACT ALL ITEMS - aim for 25-35 items for a typical LIDL receipt. Be thorough!
         throw new Error('Invalid purchase date');
       }
 
-      // Validate and clean items
+      // Validate and clean items with CORRECT price calculations
       const validItems = (data.items || [])
         .filter((item: any) =>
           item.name &&
@@ -260,13 +272,32 @@ EXTRACT ALL ITEMS - aim for 25-35 items for a typical LIDL receipt. Be thorough!
           !['лв', 'ЛЕЗ', 'BGN', 'Fi', 'G', 'B'].includes(item.name) &&
           !/^\d+[.,]\d+/.test(item.name) // Not a price fragment
         )
-        .map((item: any) => ({
-          name: item.name.trim(),
-          price: item.totalPrice,
-          quantity: item.quantity || 1,
-          unitPrice: item.unitPrice || item.totalPrice,
-          confidence: 0.95
-        }));
+        .map((item: any) => {
+          const quantity = item.quantity || 1;
+          const totalPrice = item.totalPrice;
+
+          // Calculate unit price correctly: total / quantity
+          // If GPT provided unitPrice, validate it; otherwise calculate
+          let unitPrice = item.unitPrice;
+          if (!unitPrice || unitPrice <= 0) {
+            unitPrice = totalPrice / quantity;
+          } else {
+            // Validate GPT's unitPrice matches calculation (within 0.01 tolerance)
+            const calculatedUnitPrice = totalPrice / quantity;
+            if (Math.abs(unitPrice - calculatedUnitPrice) > 0.01) {
+              console.log(`⚠️  Correcting unitPrice for "${item.name}": GPT said ${unitPrice}, calculated ${calculatedUnitPrice}`);
+              unitPrice = calculatedUnitPrice;
+            }
+          }
+
+          return {
+            name: item.name.trim(),
+            price: totalPrice,  // This is the TOTAL price for this line item
+            quantity: quantity,
+            unitPrice: Math.round(unitPrice * 100) / 100,  // Round to 2 decimals
+            confidence: 0.95
+          };
+        });
 
       return {
         retailer: data.retailer.trim(),
@@ -291,13 +322,80 @@ EXTRACT ALL ITEMS - aim for 25-35 items for a typical LIDL receipt. Be thorough!
    */
   private async validateAndEnhance(result: ProcessedReceipt, rawText: string): Promise<ProcessedReceipt> {
 
+    // VALIDATE ITEMS: Ensure all calculations are correct
+    result.items = result.items.map(item => {
+      const expectedTotal = item.quantity * item.unitPrice;
+      // Allow 0.01 tolerance for rounding
+      if (Math.abs(expectedTotal - item.price) > 0.01) {
+        console.log(`⚠️  MATH ERROR for "${item.name}": ${item.quantity} × ${item.unitPrice} = ${expectedTotal}, but item.price = ${item.price}`);
+        console.log(`   Correcting: using item.price=${item.price} as source of truth, recalculating unitPrice`);
+        item.unitPrice = Math.round((item.price / item.quantity) * 100) / 100;
+      }
+      return item;
+    });
+
+    // CALCULATE sum of items first for cross-validation
+    const itemsSum = Math.round(result.items.reduce((sum, item) => sum + item.price, 0) * 100) / 100;
+    console.log(`📊 Items sum: ${itemsSum} лв from ${result.items.length} items`);
+
     // ENHANCE TOTAL ACCURACY by cross-checking with raw text
     const totalFromText = this.extractTotalFromRawText(rawText);
-    if (totalFromText > 0 && Math.abs(totalFromText - result.total) < 0.1) {
-      console.log(`✅ Total confirmed: ${result.total} лв`);
-    } else if (totalFromText > 0) {
-      console.log(`🔧 Total corrected: ${result.total} → ${totalFromText} лв`);
-      result.total = totalFromText;
+
+    // SMART VALIDATION: Use multiple sources to determine the correct total
+    // Priority: 1) GPT result, 2) Raw text extraction, 3) Items sum
+    // But if items sum matches one of them closely, use that as validation
+
+    let finalTotal = result.total;
+    let totalSource = 'GPT';
+
+    if (totalFromText > 0) {
+      // Check which total is closer to items sum
+      const gptDiff = Math.abs(result.total - itemsSum);
+      const textDiff = Math.abs(totalFromText - itemsSum);
+
+      console.log(`🔍 Total comparison:`);
+      console.log(`   GPT: ${result.total} лв (diff from items: ${gptDiff.toFixed(2)} лв)`);
+      console.log(`   Raw text: ${totalFromText} лв (diff from items: ${textDiff.toFixed(2)} лв)`);
+      console.log(`   Items sum: ${itemsSum} лв`);
+
+      // If items sum is very close to either source (within 0.1), that's likely correct
+      if (Math.abs(itemsSum - result.total) < 0.1) {
+        // GPT total matches items - keep it
+        console.log(`✅ Total confirmed (GPT matches items): ${result.total} лв`);
+      } else if (Math.abs(itemsSum - totalFromText) < 0.1) {
+        // Raw text total matches items - use it
+        console.log(`🔧 Total corrected to match items sum: ${result.total} → ${totalFromText} лв`);
+        finalTotal = totalFromText;
+        totalSource = 'raw text (validated by items sum)';
+      } else if (textDiff < gptDiff && textDiff < 2.0) {
+        // Raw text is closer to items sum (within 2 лв tolerance)
+        console.log(`🔧 Total corrected (raw text closer to items): ${result.total} → ${totalFromText} лв`);
+        finalTotal = totalFromText;
+        totalSource = 'raw text';
+      } else if (gptDiff > 5.0 && Math.abs(itemsSum - totalFromText) < 1.0) {
+        // GPT is way off, but text matches items closely
+        console.log(`🔧 Total corrected (GPT error detected): ${result.total} → ${totalFromText} лв`);
+        finalTotal = totalFromText;
+        totalSource = 'raw text (GPT rejected)';
+      } else {
+        // Keep GPT total but warn about discrepancy
+        console.log(`⚠️  Total discrepancy detected but keeping GPT value: ${result.total} лв`);
+      }
+    } else if (Math.abs(itemsSum - result.total) < 0.1) {
+      console.log(`✅ Total confirmed (matches items sum): ${result.total} лв`);
+    }
+
+    result.total = finalTotal;
+
+    // FINAL VALIDATION: Check if total is reasonable compared to items
+    const difference = Math.abs(result.total - itemsSum);
+    if (difference > 2.0) {
+      console.log(`⚠️  WARNING: Large discrepancy between total (${result.total} лв) and items sum (${itemsSum} лв)`);
+      console.log(`   Difference: ${difference.toFixed(2)} лв - this may indicate missing items or OCR errors`);
+    } else if (difference > 0.1) {
+      console.log(`ℹ️  Small difference: ${difference.toFixed(2)} лв (may be due to rounding or discounts)`);
+    } else {
+      console.log(`✅ Total validation passed: ${result.total} лв ≈ ${itemsSum} лв (source: ${totalSource})`);
     }
 
     // ENHANCE RETAILER ACCURACY
@@ -418,12 +516,25 @@ EXTRACT ALL ITEMS - aim for 25-35 items for a typical LIDL receipt. Be thorough!
 
         // Add item if we have all required data
         if (totalPrice > 0 && totalPrice < 100 && quantity > 0) {
+          // Ensure unit price is correct: if we have quantity info, validate calculation
+          if (foundQuantityPattern && unitPrice > 0) {
+            const calculatedTotal = quantity * unitPrice;
+            // If there's a mismatch, trust the total price from receipt and recalculate unit price
+            if (Math.abs(calculatedTotal - totalPrice) > 0.01) {
+              console.log(`⚠️  Price mismatch for "${productName}": ${quantity} × ${unitPrice} = ${calculatedTotal}, but receipt shows ${totalPrice}`);
+              unitPrice = totalPrice / quantity;
+              console.log(`   Corrected unitPrice to ${unitPrice}`);
+            }
+          } else if (!foundQuantityPattern) {
+            // For single items, unit price = total price
+            unitPrice = totalPrice;
+          }
 
           additionalItems.push({
             name: productName,
             price: totalPrice, // Use the DIRECT total price from receipt
             quantity: quantity,
-            unitPrice: unitPrice,
+            unitPrice: Math.round(unitPrice * 100) / 100, // Round to 2 decimals
             confidence: 0.85
           });
 
@@ -466,16 +577,31 @@ EXTRACT ALL ITEMS - aim for 25-35 items for a typical LIDL receipt. Be thorough!
       }
     }
 
-    // Fallback: Look for largest reasonable number in the receipt
-    const allNumbers = text.match(/\d+[.,]\d{2}/g);
+    // Fallback: Look for amounts in the middle section (avoid header/footer)
+    // Split receipt into lines and focus on the area after items but before card info
+    const receiptLines = lines.filter(line => {
+      // Exclude card transaction info, timestamps, account numbers
+      return !line.includes('БОРИКА') &&
+             !line.includes('MASTER') &&
+             !line.includes('VISA') &&
+             !line.includes('XXXX') &&
+             !line.includes('RRN') &&
+             !/\d{4,}-\d{4,}-\d{4,}/.test(line) && // Card numbers
+             !/\d{2}:\d{2}:\d{2}/.test(line); // Timestamps
+    });
+
+    const allNumbers = receiptLines.join('\n').match(/\d+[.,]\d{2}/g);
     if (allNumbers) {
       const amounts = allNumbers
         .map(n => parseFloat(n.replace(',', '.')))
-        .filter(n => n > 10 && n < 10000) // Reasonable receipt totals
+        .filter(n => n >= 1 && n < 10000) // Reasonable receipt totals (allow smaller amounts)
         .sort((a, b) => b - a);
 
       if (amounts.length > 0) {
-        console.log(`💰 Fallback total: ${amounts[0]} лв`);
+        // Take the first reasonable total (usually the largest in the transaction area)
+        // But validate against sum of items if available
+        console.log(`💰 Fallback total candidates: ${amounts.slice(0, 3).join(', ')} лв`);
+        console.log(`💰 Using fallback total: ${amounts[0]} лв`);
         return amounts[0];
       }
     }
