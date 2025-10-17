@@ -35,7 +35,9 @@ yarn-error.log*
 
 # Google Cloud credentials
 google-vision-key.json
-*.json
+secrets.json
+*-key.json
+credentials*.json
 
 # Vercel
 .vercel
@@ -58,5 +60,4 @@ next-env.d.ts
 .supabase/
 
 # Други чувствителни файлове
-secrets.json
 private-keys/
