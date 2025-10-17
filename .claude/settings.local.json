@@ -52,7 +52,9 @@
       "Bash(npm run migrate:check:*)",
       "Bash(npm run migrate:fix-categories:*)",
       "Bash(npx dotenv-cli:*)",
-      "Bash(start http://localhost:3000/price-comparison)"
+      "Bash(start http://localhost:3000/price-comparison)",
+      "Bash(gh pr list:*)",
+      "Bash(gh run list:*)"
     ],
     "deny": [],
     "ask": []
