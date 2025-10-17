@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
 
     try {
       // Check if period_type column exists
-      const { data: testData, error: testError } = await supabase
+      const { data: testData, error: testError } = await (supabase as any)
         .from('budgets')
         .select('period_type')
         .limit(1);
@@ -47,12 +47,12 @@ export async function GET() {
     const supabase = createServerClient(true);
 
     // Check if budget tables exist
-    const { data: budgetsTable } = await supabase
+    const { data: budgetsTable } = await (supabase as any)
       .from('budgets')
       .select('count')
       .limit(1);
 
-    const { data: budgetLinesTable } = await supabase
+    const { data: budgetLinesTable } = await (supabase as any)
       .from('budget_lines')
       .select('count')
       .limit(1);
