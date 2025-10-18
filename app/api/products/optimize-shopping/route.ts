@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get all retailers
-    const retailerIds = [...new Set(allPrices.map(p => p.retailer_id))];
+    const retailerIds = [...new Set((allPrices as any[]).map((p: any) => p.retailer_id))];
     const { data: retailers } = await supabase
       .from('retailers')
       .select('*')
