@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
     }, 0);
 
     // Find optimal retailers (where to shop)
-    const retailerCounts = new Map<number, number>();
+    const retailerCounts = new Map<string, number>();
     recommendations.forEach(rec => {
       const id = rec.recommended_retailer.id;
       retailerCounts.set(id, (retailerCounts.get(id) || 0) + 1);
