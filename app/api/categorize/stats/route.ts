@@ -33,28 +33,37 @@ export async function GET(request: NextRequest) {
       .select('category_id, category_method, category_confidence')
       .in('receipt_id', receiptIds);
 
+    // Define type for items
+    type ItemWithCategory = {
+      category_id: string | null;
+      category_method: string | null;
+      category_confidence: number | null;
+    };
+
+    const typedItems = items as ItemWithCategory[] | null;
+
     // Calculate stats
-    const totalItems = items?.length || 0;
-    const categorizedItems = items?.filter(i => i.category_id && i.category_id !== 'other').length || 0;
-    const uncategorizedItems = items?.filter(i => !i.category_id || i.category_id === 'other').length || 0;
+    const totalItems = typedItems?.length || 0;
+    const categorizedItems = typedItems?.filter((i: ItemWithCategory) => i.category_id && i.category_id !== 'other').length || 0;
+    const uncategorizedItems = typedItems?.filter((i: ItemWithCategory) => !i.category_id || i.category_id === 'other').length || 0;
 
     // Breakdown by method
-    const methodBreakdown = items?.reduce((acc, item) => {
+    const methodBreakdown = typedItems?.reduce((acc, item) => {
       const method = item.category_method || 'unknown';
       acc[method] = (acc[method] || 0) + 1;
       return acc;
     }, {} as Record<string, number>) || {};
 
     // Breakdown by category
-    const categoryBreakdown = items?.reduce((acc, item) => {
+    const categoryBreakdown = typedItems?.reduce((acc, item) => {
       const category = item.category_id || 'uncategorized';
       acc[category] = (acc[category] || 0) + 1;
       return acc;
     }, {} as Record<string, number>) || {};
 
     // Average confidence
-    const avgConfidence = items?.length
-      ? items.reduce((sum, item) => sum + (item.category_confidence || 0), 0) / items.length
+    const avgConfidence = typedItems?.length
+      ? typedItems.reduce((sum, item) => sum + (item.category_confidence || 0), 0) / typedItems.length
       : 0;
 
     // Get user's correction count
