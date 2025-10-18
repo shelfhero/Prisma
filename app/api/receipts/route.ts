@@ -76,11 +76,11 @@ export async function GET(request: NextRequest) {
 
       return {
         id: receipt.id,
-        retailerName: receipt.retailers?.name || 'Неизвестен магазин',
+        retailerName: (receipt.retailers as any)?.name || 'Неизвестен магазин',
         totalAmount: receipt.total_amount,
         currency: receipt.currency,
         purchasedAt: receipt.purchased_at,
-        storeLocation: receipt.retailers?.name || '',
+        storeLocation: (receipt.retailers as any)?.name || '',
         itemsCount: count || 0,
         notes: '',
         createdAt: receipt.created_at
