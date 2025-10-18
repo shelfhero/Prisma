@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
       : 0;
 
     // Get user's correction count
-    const { count: correctionsCount } = await supabase
+    const { count: correctionsCount } = await (supabase as any)
       .from('categorization_corrections')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id);
