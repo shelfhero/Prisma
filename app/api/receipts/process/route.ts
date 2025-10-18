@@ -495,10 +495,10 @@ async function saveReceiptToDatabase(
     }
 
     // Use new categorization engine data if available, otherwise fall back to old method
-    let categoryId = item.category_id || null;
-    let categoryName = item.category_name || null;
-    let categoryConfidence = item.category_confidence || 0;
-    let categoryMethod = item.category_method || null;
+    let categoryId = (item as any).category_id || null;
+    let categoryName = (item as any).category_name || null;
+    let categoryConfidence = (item as any).category_confidence || 0;
+    let categoryMethod = (item as any).category_method || null;
 
     // Fallback to old categorization method if new engine didn't provide data
     if (!categoryId) {
