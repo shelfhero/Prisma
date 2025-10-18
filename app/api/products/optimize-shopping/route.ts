@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const productIds = shopping_list.map(item => item.master_product_id);
 
     // Get product details
-    const { data: products } = await supabase
+    const { data: products } = await (supabase as any)
       .from('master_products')
       .select('*')
       .in('id', productIds);
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get current prices for all products
-    const { data: allPrices } = await supabase
+    const { data: allPrices } = await (supabase as any)
       .from('current_prices')
       .select('*')
       .in('master_product_id', productIds);
