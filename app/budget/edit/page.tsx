@@ -219,7 +219,7 @@ function BudgetEditContent() {
       // Process spending data for trends and averages
       const spendingByCategory: Record<number, { total: number; months: Set<string> }> = {};
 
-      (historicalSpending || []).forEach(item => {
+      (historicalSpending || []).forEach((item: any) => {
         const categoryId = item.category_id;
         const month = new Date(item.receipts.purchased_at).toISOString().slice(0, 7);
 
@@ -233,7 +233,7 @@ function BudgetEditContent() {
 
       // Calculate category spending with trends
       const categorySpendingData: CategorySpending[] = Object.entries(spendingByCategory).map(([categoryId, data]) => {
-        const category = historicalSpending.find(item => item.category_id == parseInt(categoryId));
+        const category = historicalSpending.find((item: any) => item.category_id == parseInt(categoryId));
         const monthCount = Math.max(data.months.size, 1);
         const averageMonthly = data.total / monthCount;
 
@@ -246,7 +246,7 @@ function BudgetEditContent() {
           category_id: parseInt(categoryId),
           category_name: category?.categories?.name || 'Неизвестна',
           actual_amount: data.total,
-          items_count: historicalSpending.filter(item => item.category_id == parseInt(categoryId)).length,
+          items_count: historicalSpending.filter((item: any) => item.category_id == parseInt(categoryId)).length,
           average_monthly: averageMonthly,
           trend
         };
