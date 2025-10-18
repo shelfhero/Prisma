@@ -20,10 +20,18 @@ export async function GET(request: NextRequest) {
     const engineStats = getCategorizationStats();
 
     // Get user's item categorization breakdown
+    // First get user's receipt IDs
+    const { data: receipts } = await supabase
+      .from('receipts')
+      .select('id')
+      .eq('user_id', user.id);
+
+    const receiptIds = receipts?.map(r => r.id) || [];
+
     const { data: items } = await supabase
       .from('items')
       .select('category_id, category_method, category_confidence')
-      .eq('receipt_id', supabase.from('receipts').select('id').eq('user_id', user.id));
+      .in('receipt_id', receiptIds);
 
     // Calculate stats
     const totalItems = items?.length || 0;
