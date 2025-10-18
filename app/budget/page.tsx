@@ -289,7 +289,7 @@ function BudgetDashboard() {
 
         spendingData = (itemsData || []).map((item: any) => {
           const receipt = receiptsMap.get(item.receipt_id) as any;
-          const retailer = receipt ? retailersMap.get(receipt.retailer_id) : null;
+          const retailer = receipt ? (retailersMap.get(receipt.retailer_id) as any) : null;
           return {
             ...item,
             receipts: {
