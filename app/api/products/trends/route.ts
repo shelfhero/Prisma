@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    let query = supabase
+    let query = (supabase as any)
       .from('price_history')
       .select('*')
       .eq('master_product_id', parseInt(productId))
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
         .single();
 
       // Get product info
-      const { data: product } = await supabase
+      const { data: product } = await (supabase as any)
         .from('master_products')
         .select('normalized_name')
         .eq('id', parseInt(productId))
