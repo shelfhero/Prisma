@@ -235,9 +235,9 @@ function BudgetDashboard() {
         .from('categories')
         .select('*');
 
-      const categoriesMap = new Map(categoriesData?.map(cat => [cat.id, cat]) || []);
+      const categoriesMap = new Map(categoriesData?.map((cat: any) => [cat.id, cat]) || []);
 
-      const processedLines = (linesData || []).map(line => {
+      const processedLines = (linesData || []).map((line: any) => {
         const category = categoriesMap.get(line.category_id);
         return {
           id: line.id,
@@ -265,7 +265,7 @@ function BudgetDashboard() {
         throw receiptsError;
       }
 
-      const receiptIds = receiptsData?.map(r => r.id) || [];
+      const receiptIds = receiptsData?.map((r: any) => r.id) || [];
 
       let spendingData: any[] = [];
       if (receiptIds.length > 0) {
@@ -284,10 +284,10 @@ function BudgetDashboard() {
           .from('retailers')
           .select('*');
 
-        const retailersMap = new Map(retailersData?.map(r => [r.id, r]) || []);
-        const receiptsMap = new Map(receiptsData?.map(r => [r.id, r]) || []);
+        const retailersMap = new Map(retailersData?.map((r: any) => [r.id, r]) || []);
+        const receiptsMap = new Map(receiptsData?.map((r: any) => [r.id, r]) || []);
 
-        spendingData = (itemsData || []).map(item => {
+        spendingData = (itemsData || []).map((item: any) => {
           const receipt = receiptsMap.get(item.receipt_id);
           const retailer = receipt ? retailersMap.get(receipt.retailer_id) : null;
           return {
