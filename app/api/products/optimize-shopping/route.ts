@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       recommendations,
       total_cost: Math.round(totalCost * 100) / 100,
       potential_savings: Math.round(potentialSavings * 100) / 100,
-      optimized_retailers,
+      optimized_retailers: optimizedRetailers,
     };
 
     return NextResponse.json(optimization);
