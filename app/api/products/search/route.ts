@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Search products by keywords or name
-    let searchQuery = supabase
+    let searchQuery = (supabase as any)
       .from('master_products')
       .select('*');
 
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     const results: ProductSearchResult[] = [];
 
     for (const product of products || []) {
-      const { data: prices } = await supabase
+      const { data: prices } = await (supabase as any)
         .from('current_prices')
         .select('*')
         .eq('master_product_id', product.id);
