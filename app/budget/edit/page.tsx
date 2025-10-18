@@ -181,7 +181,7 @@ function BudgetEditContent() {
 
       if (linesError) throw linesError;
 
-      const processedLines = (linesData || []).map(line => ({
+      const processedLines = (linesData || []).map((line: any) => ({
         id: line.id,
         budget_id: line.budget_id,
         category_id: line.category_id,
