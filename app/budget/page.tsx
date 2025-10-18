@@ -197,7 +197,7 @@ function BudgetDashboard() {
       console.log('fetchBudgetData: Budgets data received', budgetsData);
 
       // Find budget that overlaps with current month
-      const budgetData = budgetsData?.find(b => {
+      const budgetData = budgetsData?.find((b: Budget) => {
         const startDate = new Date(b.start_date);
         const endDate = new Date(b.end_date);
         return startDate <= currentMonth.endDate && endDate >= currentMonth.startDate;
