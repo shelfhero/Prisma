@@ -39,6 +39,7 @@ export interface PriceHistoryPoint {
 }
 
 export interface FrequentProduct {
+  master_product_id: number;
   normalized_name: string;
   purchase_count: number;
   prices: Array<{
@@ -265,6 +266,7 @@ export async function getFrequentProductPrices(
     if (priceList.length === 0) continue;
 
     results.push({
+      master_product_id: productId,
       normalized_name: productData.name,
       purchase_count: productData.count,
       prices: priceList,
