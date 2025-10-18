@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     const receiptIds = receipts?.map(r => r.id) || [];
 
-    const { data: items } = await supabase
+    const { data: items } = await (supabase as any)
       .from('items')
       .select('category_id, category_method, category_confidence')
       .in('receipt_id', receiptIds);
