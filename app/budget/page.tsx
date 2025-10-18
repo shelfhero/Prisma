@@ -238,7 +238,7 @@ function BudgetDashboard() {
       const categoriesMap = new Map(categoriesData?.map((cat: any) => [cat.id, cat]) || []);
 
       const processedLines = (linesData || []).map((line: any) => {
-        const category = categoriesMap.get(line.category_id);
+        const category = categoriesMap.get(line.category_id) as any;
         return {
           id: line.id,
           budget_id: line.budget_id,
