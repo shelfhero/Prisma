@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
 
     // Group by retailer and calculate trends
-    const retailerPrices = new Map<number, typeof priceHistory>();
+    const retailerPrices = new Map<string, typeof priceHistory>();
 
     for (const price of priceHistory || []) {
       if (!retailerPrices.has(price.retailer_id)) {
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
       trends.push({
         master_product_id: parseInt(productId),
         product_name: product?.normalized_name || '',
-        retailer_id: retailerId,
+        retailer_id: retailerId as any,
         retailer_name: retailer?.name || '',
         trend_direction: trendDirection,
         price_change_percent: Math.round(priceChange * 10) / 10,
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Also include price history data points for charting
-    const chartData = (priceHistory || []).map(p => ({
+    const chartData = (priceHistory || []).map((p: any) => ({
       date: p.seen_at,
       price: p.unit_price,
       retailer_id: p.retailer_id,
