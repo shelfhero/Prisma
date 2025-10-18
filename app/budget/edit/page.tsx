@@ -194,7 +194,7 @@ function BudgetEditContent() {
 
       // Initialize edited allocations
       const allocations: Record<number, number> = {};
-      processedLines.forEach(line => {
+      processedLines.forEach((line: BudgetLine) => {
         allocations[line.category_id] = line.limit_amount;
       });
       setEditedAllocations(allocations);
