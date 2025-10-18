@@ -62,8 +62,8 @@ export async function POST(request: NextRequest) {
 
     // Build recommendations
     const recommendations = shopping_list.map(item => {
-      const product = products.find(p => p.id === item.master_product_id);
-      const productPrices = allPrices.filter(p => p.master_product_id === item.master_product_id);
+      const product = (products as any[]).find((p: any) => p.id === item.master_product_id);
+      const productPrices = (allPrices as any[]).filter((p: any) => p.master_product_id === item.master_product_id);
 
       // Sort by price
       const sorted = [...productPrices].sort((a, b) => a.unit_price - b.unit_price);
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
     const optimization: BudgetOptimization = {
       shopping_list: shopping_list.map(item => ({
         master_product_id: item.master_product_id,
-        product_name: products.find(p => p.id === item.master_product_id)?.normalized_name || '',
+        product_name: (products as any[]).find((p: any) => p.id === item.master_product_id)?.normalized_name || '',
         quantity: item.quantity,
       })),
       recommendations,
