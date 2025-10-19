@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('[cleanup-user] Found', users?.length, 'total users');
-    const user = users.find(u => u.email === email);
+    const user = users.find((u: any) => u.email === email);
 
     if (!user) {
       console.error('[cleanup-user] User not found:', email);
