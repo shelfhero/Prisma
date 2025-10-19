@@ -185,7 +185,7 @@ function DashboardContent() {
         .gte('purchased_at', currentMonth.startDate.toISOString())
         .lte('purchased_at', currentMonth.endDate.toISOString());
 
-      const receiptIds = currentMonthReceipts?.map(r => r.id) || [];
+      const receiptIds = currentMonthReceipts?.map((r: any) => r.id) || [];
 
       let receiptItemsData: any[] = [];
       if (receiptIds.length > 0) {
