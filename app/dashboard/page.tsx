@@ -194,17 +194,17 @@ function DashboardContent() {
           .select('id, product_name, total_price, qty, category_id, receipt_id')
           .in('receipt_id', receiptIds);
 
-        const receiptsMap = new Map(currentMonthReceipts?.map(r => [r.id, r]) || []);
+        const receiptsMap = new Map(currentMonthReceipts?.map((r: any) => [r.id, r]) || []);
 
-        receiptItemsData = (itemsData || []).map(item => {
+        receiptItemsData = (itemsData || []).map((item: any) => {
           const receipt = receiptsMap.get(item.receipt_id);
-          const retailer = receipt ? retailersMap.get(receipt.retailer_id) : null;
+          const retailer = receipt ? retailersMap.get((receipt as any).retailer_id) : null;
           return {
             ...item,
             receipts: {
-              id: receipt?.id,
-              purchased_at: receipt?.purchased_at,
-              retailers: retailer ? { name: retailer.name } : null
+              id: (receipt as any)?.id,
+              purchased_at: (receipt as any)?.purchased_at,
+              retailers: retailer ? { name: (retailer as any).name } : null
             }
           };
         });
@@ -222,17 +222,17 @@ function DashboardContent() {
           .from('categories')
           .select('*');
 
-        const categoriesMap = new Map(categoriesData?.map(cat => [cat.id, cat]) || []);
+        const categoriesMap = new Map(categoriesData?.map((cat: any) => [cat.id, cat]) || []);
 
-        budgetLinesData = (linesData || []).map(line => {
+        budgetLinesData = (linesData || []).map((line: any) => {
           const category = categoriesMap.get(line.category_id);
           return {
             id: line.id,
             category_id: line.category_id,
-            category_name: category?.name || 'Неизвестна категория',
+            category_name: (category as any)?.name || 'Неизвестна категория',
             limit_amount: line.limit_amount,
-            icon: category?.icon || '📦',
-            color: category?.color || 'gray'
+            icon: (category as any)?.icon || '📦',
+            color: (category as any)?.color || 'gray'
           };
         });
       }
@@ -266,14 +266,14 @@ function DashboardContent() {
           percentage: budgetPercentage,
           isOverBudget: budgetPercentage > 100
         },
-        recentReceipts: (receiptsData || []).map(receipt => ({
+        recentReceipts: (receiptsData || []).map((receipt: any) => ({
           id: receipt.id,
           retailer_name: receipt.retailers?.name || 'Неизвестен магазин',
           total_amount: receipt.total_amount,
           purchased_at: receipt.purchased_at,
           retailer_icon: getRetailerIcon(receipt.retailers?.name)
         })),
-        categorySpending: (budgetLinesData || []).map(line => {
+        categorySpending: (budgetLinesData || []).map((line: any) => {
           const spending = spendingByCategory.get(line.category_id) || { total: 0, items: [] };
           const percentageUsed = line.limit_amount > 0 ? (spending.total / line.limit_amount) * 100 : 0;
 
@@ -291,7 +291,7 @@ function DashboardContent() {
           totalSpent,
           avgReceiptAmount,
           daysPassed: currentDate.getDate(), // Current day of the month
-          topCategory: budgetLinesData?.find(line => {
+          topCategory: budgetLinesData?.find((line: any) => {
             const spending = spendingByCategory.get(line.category_id);
             return spending && spending.total > 0;
           })?.category_name || 'Основни храни',
