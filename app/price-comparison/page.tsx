@@ -107,8 +107,8 @@ export default function PriceComparisonPage() {
 
           <TabsContent value="recommendations">
             <ShoppingRecommendations
-              singleStore={singleStoreRec}
-              multiStore={multiStoreRec}
+              singleStore={singleStoreRec || undefined}
+              multiStore={multiStoreRec || undefined}
             />
           </TabsContent>
         </Tabs>
