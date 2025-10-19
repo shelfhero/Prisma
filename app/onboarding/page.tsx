@@ -22,7 +22,7 @@ export default function OnboardingPage() {
     }
 
     // Redirect if already completed onboarding
-    if (profile?.onboarding_completed) {
+    if ((profile as any)?.onboarding_completed) {
       router.push('/dashboard');
     }
   }, [user, profile, loading, router]);
@@ -45,7 +45,7 @@ export default function OnboardingPage() {
   }
 
   // Get initial step from profile if available
-  const initialStep = profile?.onboarding_step as any || 'welcome';
+  const initialStep = (profile as any)?.onboarding_step || 'welcome';
 
   return <OnboardingFlow initialStep={initialStep} />;
 }
