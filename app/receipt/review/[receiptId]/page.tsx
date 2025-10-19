@@ -144,7 +144,7 @@ function ReceiptReviewContent() {
         .from('categories')
         .select('id, name, icon, color');
 
-      const categoryMap = new Map(categoriesData?.map(cat => [cat.id.toString(), cat]) || []);
+      const categoryMap = new Map(categoriesData?.map((cat: any) => [cat.id.toString(), cat]) || []);
 
       const transformedItems: ReceiptItem[] = data.receipt.items.map((item: any) => {
         const category = item.category_id ? categoryMap.get(item.category_id.toString()) : null;
@@ -156,8 +156,8 @@ function ReceiptReviewContent() {
           unit_price: item.price / (item.quantity || 1),
           total_price: item.price,
           category_id: item.category_id?.toString(),
-          category_name: category?.name,
-          category_icon: category?.icon,
+          category_name: (category as any)?.name,
+          category_icon: (category as any)?.icon,
           needs_review: !item.category_id,
         };
       });
