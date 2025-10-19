@@ -54,7 +54,10 @@
       "Bash(npx dotenv-cli:*)",
       "Bash(start http://localhost:3000/price-comparison)",
       "Bash(gh pr list:*)",
-      "Bash(gh run list:*)"
+      "Bash(gh run list:*)",
+      "Bash(git fetch:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(cat package.json)"
     ],
     "deny": [],
     "ask": []
