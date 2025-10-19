@@ -167,12 +167,15 @@ function DashboardContent() {
 
       const retailersMap = new Map(retailersData?.map((r: any) => [r.id, r]) || []);
 
-      const receiptsData = recentReceiptsData?.map((r: any) => ({
-        id: r.id,
-        total_amount: r.total_amount,
-        purchased_at: r.purchased_at,
-        retailers: retailersMap.get(r.retailer_id) ? { name: retailersMap.get(r.retailer_id)!.name } : null
-      })) || [];
+      const receiptsData = recentReceiptsData?.map((r: any) => {
+        const retailer = retailersMap.get(r.retailer_id);
+        return {
+          id: r.id,
+          total_amount: r.total_amount,
+          purchased_at: r.purchased_at,
+          retailers: retailer ? { name: (retailer as any).name } : null
+        };
+      }) || [];
 
       // Fetch receipt items for current month - simplified to avoid 406 errors
       const { data: currentMonthReceipts } = await supabase
