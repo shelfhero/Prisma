@@ -4,6 +4,9 @@ const withBundleAnalyzer = require('@next/bundle-analyzer')({
   enabled: process.env.ANALYZE === 'true',
 })
 
+// Detect if we're running on Vercel
+const isVercel = process.env.VERCEL === '1'
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Image optimization for mobile
@@ -18,19 +21,33 @@ const nextConfig = {
     minimumCacheTTL: 60 * 60 * 24 * 30, // 30 days
   },
 
-  // Simple webpack override - just disable caching and workers
+  // Webpack override - optimized differently for Vercel vs local
   webpack: (config, { dev, isServer }) => {
-    // Disable webpack cache completely
-    config.cache = false;
+    // Only apply local dev optimizations when NOT on Vercel
+    if (!isVercel) {
+      // Disable webpack cache completely (local dev only)
+      config.cache = false;
 
-    // Force single-threaded mode
-    config.parallelism = 1;
+      // Force single-threaded mode (local dev only)
+      config.parallelism = 1;
 
-    // Remove worker-related plugins
-    config.plugins = config.plugins.filter(plugin => {
-      const name = plugin.constructor.name;
-      return !name.includes('Worker') && !name.includes('Thread');
-    });
+      // Remove worker-related plugins (local dev only)
+      config.plugins = config.plugins.filter(plugin => {
+        const name = plugin.constructor.name;
+        return !name.includes('Worker') && !name.includes('Thread');
+      });
+    } else {
+      // Vercel-specific optimizations
+      // Enable webpack caching for faster builds
+      if (!config.cache) {
+        config.cache = {
+          type: 'filesystem',
+          allowCollectingMemory: true,
+        };
+      }
+      // Use more parallelism on Vercel's powerful machines
+      config.parallelism = 100;
+    }
 
     // Optimize chunk splitting for better caching and smaller initial bundle
     if (!isServer && !dev) {
@@ -76,9 +93,13 @@ const nextConfig = {
         maxInitialRequests: 25,
         minSize: 20000,
       };
+
+      // Minimize bundle size
+      config.optimization.minimize = true;
+      config.optimization.usedExports = true;
     }
 
-    // Disable worker fallbacks
+    // Disable worker fallbacks (always apply)
     config.resolve = config.resolve || {};
     config.resolve.fallback = config.resolve.fallback || {};
     config.resolve.fallback.worker_threads = false;
@@ -154,8 +175,8 @@ const nextConfig = {
   // Disable powered by header
   poweredByHeader: false,
 
-  // Production source maps (disabled for smaller bundle, but enable for Sentry)
-  productionBrowserSourceMaps: true
+  // Production source maps (only enable on Vercel if Sentry is configured)
+  productionBrowserSourceMaps: isVercel ? false : true
 }
 
 // Sentry configuration

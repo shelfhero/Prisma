@@ -146,7 +146,7 @@ function DashboardContent() {
       }
 
       // Find budget that overlaps with current month
-      const budgetData = budgetsData?.find(b => {
+      const budgetData = budgetsData?.find((b: any) => {
         const startDate = new Date(b.start_date);
         const endDate = new Date(b.end_date);
         return startDate <= currentMonth.endDate && endDate >= currentMonth.startDate;
@@ -165,9 +165,9 @@ function DashboardContent() {
         .from('retailers')
         .select('*');
 
-      const retailersMap = new Map(retailersData?.map(r => [r.id, r]) || []);
+      const retailersMap = new Map(retailersData?.map((r: any) => [r.id, r]) || []);
 
-      const receiptsData = recentReceiptsData?.map(r => ({
+      const receiptsData = recentReceiptsData?.map((r: any) => ({
         id: r.id,
         total_amount: r.total_amount,
         purchased_at: r.purchased_at,

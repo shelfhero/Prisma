@@ -331,7 +331,7 @@ function BudgetDashboard() {
       // ONLY show categories that have budget allocations for this month
       // De-duplicate by category_id - only keep the latest budget line for each category
       const categoryLinesMap = new Map<string, typeof processedLines[0]>();
-      processedLines.forEach(line => {
+      processedLines.forEach((line: typeof processedLines[0]) => {
         categoryLinesMap.set(line.category_id, line);
       });
 
