@@ -115,14 +115,28 @@ export class UltimateReceiptProcessor {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
     const apiKey = process.env.GOOGLE_CLOUD_API_KEY;
     const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
 
-    if (!projectId && !apiKey && !credentialsPath) {
+    if (!projectId && !apiKey && !credentialsPath && !credentialsJson) {
       throw new Error('Google Cloud Vision not configured');
     }
 
     const clientConfig: any = {};
     if (projectId) clientConfig.projectId = projectId;
     if (apiKey && !apiKey.startsWith('.')) clientConfig.apiKey = apiKey;
+
+    // Support credentials as JSON string (for Railway and other cloud platforms)
+    if (credentialsJson) {
+      try {
+        const credentials = JSON.parse(credentialsJson);
+        clientConfig.credentials = credentials;
+        clientConfig.projectId = credentials.project_id;
+        console.log('✅ Using Google Cloud credentials from JSON environment variable');
+      } catch (error) {
+        console.error('❌ Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON:', error);
+        throw new Error('Invalid Google Cloud credentials JSON');
+      }
+    }
 
     const client = new ImageAnnotatorClient(clientConfig);
     const [result] = await client.textDetection({ image: { content: imageBuffer } });

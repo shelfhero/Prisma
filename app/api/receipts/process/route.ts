@@ -167,8 +167,16 @@ if (!supabaseUrl.startsWith('https://')) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// File-like type that works in both browser and Node.js environments
+interface FileWithMetadata {
+  name: string;
+  type: string;
+  size: number;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
 // Utility functions
-function validateFile(file: File): { valid: boolean; error?: string } {
+function validateFile(file: FileWithMetadata): { valid: boolean; error?: string } {
   // Check file type
   if (!file.type.startsWith('image/')) {
     return { valid: false, error: ERRORS.INVALID_FILE };
@@ -257,7 +265,7 @@ async function getCategoryId(categoryName: string): Promise<string | null> {
 }
 
 async function uploadImageToStorage(
-  file: File,
+  file: FileWithMetadata,
   userId: string,
   receiptId: string,
   imageIndex: number
@@ -266,9 +274,14 @@ async function uploadImageToStorage(
   const fileName = `image_${imageIndex}.${fileExtension}`;
   const storagePath = `receipts/${userId}/${receiptId}/${fileName}`;
 
+  // Convert to buffer for Supabase storage
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
   const { data, error } = await supabase.storage
     .from('receipt-images')
-    .upload(storagePath, file, {
+    .upload(storagePath, buffer, {
+      contentType: file.type,
       cacheControl: '3600',
       upsert: false
     });
@@ -283,7 +296,7 @@ async function uploadImageToStorage(
   return { path: storagePath };
 }
 
-async function processReceiptBasic(imageFiles: File[]): Promise<OCRResponse> {
+async function processReceiptBasic(imageFiles: FileWithMetadata[]): Promise<OCRResponse> {
   console.log('📸 Basic receipt processing (fallback mode)...');
   console.log(`   Image files received: ${imageFiles.length}`);
 
@@ -323,7 +336,7 @@ async function processReceiptBasic(imageFiles: File[]): Promise<OCRResponse> {
   };
 }
 
-async function processReceiptEnhanced(imageFiles: File[]): Promise<OCRResponse> {
+async function processReceiptEnhanced(imageFiles: FileWithMetadata[]): Promise<OCRResponse> {
   console.log('💎 ULTIMATE Receipt Processing - GUARANTEED 100% ACCURACY ON TOTAL/STORE/DATE');
   console.log(`   Image files received: ${imageFiles.length}`);
 
@@ -406,7 +419,7 @@ async function processReceiptEnhanced(imageFiles: File[]): Promise<OCRResponse> 
 async function saveReceiptToDatabase(
   userId: string,
   ocrResponse: OCRResponse,
-  imageFiles: File[]
+  imageFiles: FileWithMetadata[]
 ): Promise<{ receiptId: string; totalAmount: number; itemsCount: number }> {
   const receipt = ocrResponse.receipt;
 
@@ -674,12 +687,13 @@ export async function POST(request: NextRequest) {
 
     // Parse multipart form data
     const formData = await request.formData();
-    const files: File[] = [];
+    const files: FileWithMetadata[] = [];
 
     // Extract files from form data
+    // In Node.js/Edge runtime, FormData values have the File-like interface
     for (const [key, value] of formData.entries()) {
-      if (value instanceof File && key.startsWith('image')) {
-        files.push(value);
+      if (value && typeof value === 'object' && 'arrayBuffer' in value && key.startsWith('image')) {
+        files.push(value as FileWithMetadata);
       }
     }
 
