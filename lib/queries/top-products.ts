@@ -76,12 +76,10 @@ export async function getEssentialProducts(): Promise<TopProduct[]> {
   const supabase = createBrowserClient();
 
   try {
-    // Get all essential product keywords
-    const keywords = ESSENTIAL_PRODUCTS_TOP_10.flatMap(p => p.keywords);
+    console.log('[getEssentialProducts] Starting...');
 
-    // Build the OR filter for keywords
-    const orFilters = keywords.map(k => `normalized_name.ilike.%${k}%`).join(',');
-
+    // Search for products matching essential keywords
+    // Using a simpler approach - get all products and filter client-side
     const { data: products, error } = await supabase
       .from('master_products')
       .select(`
@@ -92,13 +90,23 @@ export async function getEssentialProducts(): Promise<TopProduct[]> {
         unit,
         category_id
       `)
-      .or(orFilters)
-      .limit(50);
+      .limit(500);
 
     if (error || !products) {
       console.error('Error fetching essential products:', error);
       return [];
     }
+
+    console.log('[getEssentialProducts] Fetched products count:', products.length);
+
+    // Filter products that match our essential keywords
+    const keywords = ESSENTIAL_PRODUCTS_TOP_10.flatMap(p => p.keywords);
+    const matchedProducts = products.filter(p => {
+      const name = p.normalized_name?.toLowerCase() || '';
+      return keywords.some(keyword => name.includes(keyword.toLowerCase()));
+    });
+
+    console.log('[getEssentialProducts] Matched products count:', matchedProducts.length);
 
     // Get categories
     const { data: categories } = await supabase
@@ -107,17 +115,22 @@ export async function getEssentialProducts(): Promise<TopProduct[]> {
 
     const categoriesMap = new Map(categories?.map((cat: any) => [cat.id, cat]) || []);
 
-    // Get prices for these products
-    const productIds = products.map(p => p.id);
+    // Get prices for matched products only
+    const productIds = matchedProducts.map(p => p.id);
 
     if (productIds.length === 0) {
+      console.log('[getEssentialProducts] No matched products found');
       return [];
     }
+
+    console.log('[getEssentialProducts] Fetching prices for', productIds.length, 'products');
 
     const { data: currentPrices } = await supabase
       .from('current_prices')
       .select('*')
       .in('master_product_id', productIds);
+
+    console.log('[getEssentialProducts] Current prices count:', currentPrices?.length || 0);
 
     // Get retailers
     const { data: retailers } = await supabase
@@ -126,8 +139,8 @@ export async function getEssentialProducts(): Promise<TopProduct[]> {
 
     const retailersMap = new Map(retailers?.map((r: any) => [r.id, r]) || []);
 
-    // Group prices by product
-    const productsWithPrices = products
+    // Group prices by product - use matchedProducts
+    const productsWithPrices = matchedProducts
       .map(product => {
         const productPrices = currentPrices?.filter(p => p.master_product_id === product.id) || [];
 
@@ -174,9 +187,13 @@ export async function getEssentialProducts(): Promise<TopProduct[]> {
 
 // Master function - smart selection
 export async function getTopProductsForUser(userId?: string): Promise<TopProductsResult> {
+  console.log('[getTopProductsForUser] Starting with userId:', userId);
+
   // Strategy 1: Personalized (if logged in with history)
   if (userId) {
+    console.log('[getTopProductsForUser] Trying personalized products...');
     const userProducts = await getUserTopProducts(userId);
+    console.log('[getTopProductsForUser] User products count:', userProducts.length);
 
     if (userProducts.length >= 10) {
       return {
@@ -187,7 +204,10 @@ export async function getTopProductsForUser(userId?: string): Promise<TopProduct
     }
 
     // Mix with popular if not enough personal history
+    console.log('[getTopProductsForUser] Not enough user products, trying popular...');
     const popular = await getPopularProducts();
+    console.log('[getTopProductsForUser] Popular products count:', popular.length);
+
     const mixed = [...userProducts, ...popular]
       .filter((v, i, a) => a.findIndex(t => t.master_product_id === v.master_product_id) === i)
       .slice(0, 15);
@@ -202,7 +222,9 @@ export async function getTopProductsForUser(userId?: string): Promise<TopProduct
   }
 
   // Strategy 2: Popular products
+  console.log('[getTopProductsForUser] Trying popular products...');
   const popular = await getPopularProducts();
+  console.log('[getTopProductsForUser] Popular products count:', popular.length);
 
   if (popular.length >= 10) {
     return {
@@ -213,7 +235,9 @@ export async function getTopProductsForUser(userId?: string): Promise<TopProduct
   }
 
   // Strategy 3: Fallback to essentials
+  console.log('[getTopProductsForUser] Falling back to essentials...');
   const essentials = await getEssentialProducts();
+  console.log('[getTopProductsForUser] Essentials products count:', essentials.length);
 
   return {
     products: essentials,
