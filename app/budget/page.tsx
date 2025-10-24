@@ -648,70 +648,58 @@ function BudgetDashboard() {
       <div className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
+            <div className="flex items-center space-x-3">
               <PiggyBank className="w-8 h-8 text-blue-600 mr-3" />
               <h1 className="text-xl font-semibold text-gray-900">
                 Бюджет
               </h1>
+              {activeTab === 'overview' && (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowBudgetSetup(true)}
+                  className="flex items-center space-x-2"
+                >
+                  <Edit className="w-4 h-4" />
+                  <span>{budget ? 'Редактирай' : 'Създай бюджет'}</span>
+                </Button>
+              )}
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center">
               {budget && (
-                <>
-                  <div className="flex space-x-1 mr-4">
-                    <button
-                      onClick={() => setActiveTab('overview')}
-                      className={`px-3 py-2 text-sm font-medium rounded-md ${
-                        activeTab === 'overview'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      Преглед
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('history')}
-                      className={`px-3 py-2 text-sm font-medium rounded-md ${
-                        activeTab === 'history'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      <History className="w-4 h-4 mr-1 inline" />
-                      История
-                    </button>
-                    <button
-                      onClick={() => setActiveTab('smart')}
-                      className={`px-3 py-2 text-sm font-medium rounded-md ${
-                        activeTab === 'smart'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                    >
-                      <TrendingUp className="w-4 h-4 mr-1 inline" />
-                      Интелигентни
-                    </button>
-                  </div>
-                  {activeTab === 'overview' && (
-                    <>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowBudgetSetup(true)}
-                        className="flex items-center space-x-2"
-                      >
-                        <Edit className="w-4 h-4" />
-                        <span>Редактирай</span>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => router.push('/upload-receipt')}
-                        className="flex items-center space-x-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Добави бон</span>
-                      </Button>
-                    </>
-                  )}
-                </>
+                <div className="flex space-x-1">
+                  <button
+                    onClick={() => setActiveTab('overview')}
+                    className={`px-3 py-2 text-sm font-medium rounded-md ${
+                      activeTab === 'overview'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Преглед
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('history')}
+                    className={`px-3 py-2 text-sm font-medium rounded-md ${
+                      activeTab === 'history'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <History className="w-4 h-4 mr-1 inline" />
+                    <span className="hidden sm:inline">История</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('smart')}
+                    className={`px-3 py-2 text-sm font-medium rounded-md ${
+                      activeTab === 'smart'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <TrendingUp className="w-4 h-4 mr-1 inline" />
+                    <span className="hidden sm:inline">Интелигентни</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
