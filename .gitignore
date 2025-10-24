@@ -60,4 +60,5 @@ next-env.d.ts
 .supabase/
 
 # Други чувствителни файлове
-private-keys/
+private-keys/google vision api json/
+*.json

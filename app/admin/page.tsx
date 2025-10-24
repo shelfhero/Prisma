@@ -14,8 +14,10 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  RefreshCw
+  RefreshCw,
+  DollarSign
 } from 'lucide-react'
+import PriceUploader from '@/components/admin/PriceUploader'
 
 interface Metrics {
   total_users: number
@@ -58,7 +60,7 @@ export default function AdminDashboard() {
   const [allItems, setAllItems] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'analytics' | 'system' | 'items'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'analytics' | 'system' | 'items' | 'prices'>('overview')
 
   useEffect(() => {
     fetchDashboardData()
@@ -307,6 +309,7 @@ export default function AdminDashboard() {
           <div className="flex gap-4 mt-6 border-b border-gray-200">
             {[
               { id: 'overview', label: 'Преглед', icon: Activity },
+              { id: 'prices', label: 'Качи цени', icon: DollarSign },
               { id: 'items', label: 'Всички артикули', icon: Receipt },
               { id: 'users', label: 'Потребители', icon: Users },
               { id: 'analytics', label: 'Аналитика', icon: PieChart },
@@ -438,6 +441,12 @@ export default function AdminDashboard() {
               </div>
             </div>
           </>
+        )}
+
+        {activeTab === 'prices' && (
+          <div className="max-w-4xl">
+            <PriceUploader />
+          </div>
         )}
 
         {activeTab === 'system' && (

@@ -1,35 +1,56 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { createBrowserClient } from '@/lib/supabase-simple';
-import { getTopProductsForUser } from '@/lib/queries/top-products';
-import { TOTAL_MONTHLY_SAVINGS } from '@/lib/essential-products';
+import { TrendingUp, Clock, DollarSign, ShoppingCart } from 'lucide-react';
 
-interface PriceData {
-  products: any[];
-  type: string;
-  message: string;
+interface StandardProduct {
+  position: number;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  unit: string;
+  retailer_count: number;
+  avg_price: number;
+  min_price: number;
+  max_price: number;
+  promotion_count: number;
+  prices: Array<{
+    retailer: string;
+    price: number;
+    is_promotion: boolean;
+    promotion_text?: string;
+    source: 'manual' | 'user_receipts';
+    last_updated: string;
+  }>;
+  manual_count: number;
+  user_data_count: number;
+  last_updated: string;
 }
 
 export default function PriceComparisonPage() {
-  const router = useRouter();
-  const [data, setData] = useState<PriceData | null>(null);
+  const [products, setProducts] = useState<StandardProduct[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadData() {
-      const supabase = createBrowserClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id || null);
-
-      const result = await getTopProductsForUser(user?.id);
-      setData(result);
-      setLoading(false);
-    }
-    loadData();
+    loadPrices();
   }, []);
+
+  async function loadPrices() {
+    const supabase = createBrowserClient();
+
+    const { data, error } = await supabase
+      .from('aggregated_standard_prices')
+      .select('*')
+      .order('position');
+
+    if (!error && data) {
+      setProducts(data);
+    }
+
+    setLoading(false);
+  }
 
   if (loading) {
     return (
@@ -42,199 +63,207 @@ export default function PriceComparisonPage() {
     );
   }
 
-  if (!data || data.products.length === 0) {
+  const totalSavings = products.reduce((sum, p) => sum + (p.max_price - p.min_price), 0);
+  const hasData = products.some(p => p.retailer_count > 0);
+
+  if (!hasData) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center max-w-md">
           <p className="text-6xl mb-4">📊</p>
-          <h2 className="text-2xl font-bold mb-2">Няма данни за цени</h2>
+          <h2 className="text-2xl font-bold mb-2">Скоро!</h2>
           <p className="text-gray-600 mb-6">
-            Качете касови бонове, за да видите сравнение на цени
+            Цените се актуализират седмично. Проверете отново скоро!
           </p>
-          <button
-            onClick={() => router.push('/upload-receipt')}
-            className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700"
-          >
-            Качи касов бон
-          </button>
         </div>
       </div>
     );
   }
 
-  const totalSavings = data.products
-    .reduce((sum, p) => sum + (p.potential_savings || 0), 0)
-    .toFixed(2);
-
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* Header */}
-      <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6">
-        <h1 className="text-2xl font-bold mb-2">
-          💰 Сравни цените
-        </h1>
-        <p className="text-green-100 text-sm">
-          {data.message}
-        </p>
+      <div className="bg-gradient-to-r from-green-600 to-green-700 text-white">
+        <div className="max-w-6xl mx-auto p-6">
+          <h1 className="text-3xl font-bold mb-2">
+            💰 Сравни цените
+          </h1>
+          <p className="text-green-100">
+            10-те основни продукта във всички магазини
+          </p>
+          <div className="mt-4 flex items-center gap-2 text-sm text-green-100">
+            <Clock className="w-4 h-4" />
+            Актуализация: {new Date().toLocaleDateString('bg-BG', { weekday: 'long' })}
+          </div>
+        </div>
       </div>
 
-      {/* Summary Stats */}
-      <div className="bg-white border-b p-4">
-        <div className="flex justify-around items-center max-w-4xl mx-auto">
-          <div className="text-center">
-            <div className="text-3xl font-bold text-green-600">
-              {data.products.length}
-            </div>
-            <div className="text-sm text-gray-600">
-              Продукта
-            </div>
+      {/* Summary */}
+      <div className="bg-white border-b shadow-sm">
+        <div className="max-w-6xl mx-auto p-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <SummaryCard
+              title="Продукта"
+              value={products.length}
+              icon={ShoppingCart}
+              color="green"
+            />
+            <SummaryCard
+              title="Магазина"
+              value={products[0]?.retailer_count || 0}
+              icon={DollarSign}
+              color="blue"
+            />
+            <SummaryCard
+              title="Промоции"
+              value={products.reduce((sum, p) => sum + p.promotion_count, 0)}
+              icon={TrendingUp}
+              color="red"
+            />
+            <SummaryCard
+              title="Макс. спестяване"
+              value={`${totalSavings.toFixed(2)} лв`}
+              icon={DollarSign}
+              color="purple"
+            />
           </div>
-          {data.type === 'personalized' && parseFloat(totalSavings) > 0 && (
-            <div className="text-center">
-              <div className="text-3xl font-bold text-green-600">
-                {totalSavings} лв
-              </div>
-              <div className="text-sm text-gray-600">
-                Потенциални спестявания
-              </div>
-            </div>
-          )}
-          {data.type !== 'personalized' && (
-            <div className="text-center">
-              <div className="text-3xl font-bold text-green-600">
-                до {TOTAL_MONTHLY_SAVINGS} лв
-              </div>
-              <div className="text-sm text-gray-600">
-                Месечни спестявания
-              </div>
-            </div>
-          )}
+        </div>
+      </div>
+
+      {/* Products Grid */}
+      <div className="max-w-6xl mx-auto p-4">
+        <div className="grid md:grid-cols-2 gap-4">
+          {products.filter(p => p.retailer_count > 0).map((product) => (
+            <ProductCard key={product.position} product={product} />
+          ))}
         </div>
       </div>
 
-      {/* Products List */}
-      <div className="max-w-4xl mx-auto p-4 space-y-4">
-        {data.products.map((product, index) => (
-          <ProductPriceCard
-            key={product.master_product_id}
-            product={product}
-            rank={index + 1}
-            showSavings={data.type === 'personalized'}
-          />
-        ))}
-      </div>
-
-      {/* Call to Action */}
-      {data.type !== 'personalized' && (
-        <div className="max-w-4xl mx-auto p-4 mt-8">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
-            <p className="text-xl font-semibold mb-2">
-              💡 Искаш персонализирани препоръки?
-            </p>
-            <p className="text-gray-600 mb-4">
-              Качи 5+ касови бона, за да видиш ТВОИТЕ спестявания
-            </p>
-            <button
-              onClick={() => router.push('/upload-receipt')}
-              className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700"
-            >
-              Качи касов бон
-            </button>
-          </div>
+      {/* Info Footer */}
+      <div className="max-w-6xl mx-auto p-4 mt-8">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            Как работи?
+          </h3>
+          <ul className="space-y-2 text-sm text-gray-700">
+            <li>✅ Цените се актуализират седмично от проверени източници</li>
+            <li>✅ Данните се обогатяват автоматично от касовите бележки на потребителите</li>
+            <li>✅ Промоциите се актуализират при наличие</li>
+            <li>✅ Спести до {totalSavings.toFixed(2)} лв като избираш най-евтиното</li>
+          </ul>
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-function ProductPriceCard({ product, rank, showSavings }: any) {
+function SummaryCard({ title, value, icon: Icon, color }: any) {
+  const colors = {
+    green: 'text-green-600',
+    blue: 'text-blue-600',
+    red: 'text-red-600',
+    purple: 'text-purple-600'
+  };
+
+  return (
+    <div className="text-center">
+      <div className={`text-3xl font-bold ${colors[color]}`}>
+        {value}
+      </div>
+      <div className="text-sm text-gray-600 flex items-center justify-center gap-1 mt-1">
+        <Icon className="w-4 h-4" />
+        {title}
+      </div>
+    </div>
+  );
+}
+
+function ProductCard({ product }: { product: StandardProduct }) {
   const [expanded, setExpanded] = useState(false);
 
   if (!product.prices || product.prices.length === 0) {
     return null;
   }
 
-  const cheapestPrice = product.prices[0].price;
-  const mostExpensivePrice = product.prices[product.prices.length - 1].price;
-  const priceDiff = mostExpensivePrice - cheapestPrice;
-  const savingsPercent = priceDiff > 0
-    ? ((priceDiff / mostExpensivePrice) * 100).toFixed(0)
-    : '0';
+  const priceDiff = product.max_price - product.min_price;
+  const savingsPercent = ((priceDiff / product.max_price) * 100).toFixed(0);
 
   return (
     <div className="bg-white rounded-lg shadow border overflow-hidden">
-      {/* Product Header */}
-      <div className="p-4 border-b bg-gray-50">
-        <div className="flex items-start gap-3">
-          {/* Rank Badge */}
-          <div className="flex-shrink-0 w-10 h-10 bg-green-600 text-white rounded-full flex items-center justify-center font-bold">
-            {rank}
-          </div>
-
-          {/* Product Info */}
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-lg mb-2">
-              {product.normalized_name}
-            </h3>
-
-            <div className="flex flex-wrap gap-2 text-sm">
-              {product.brand && (
-                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                  {product.brand}
-                </span>
-              )}
-              {product.size && product.unit && (
-                <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
-                  {product.size}{product.unit}
-                </span>
-              )}
-              <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                {product.category_name}
+      {/* Header */}
+      <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-4 border-b">
+        <div className="flex items-center gap-3">
+          <span className="text-4xl">{product.icon}</span>
+          <div className="flex-1">
+            <h3 className="font-bold text-lg">{product.name}</h3>
+            <p className="text-sm text-gray-600">{product.description}</p>
+            <div className="flex gap-2 mt-1 text-xs">
+              <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                {product.unit}
+              </span>
+              <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                {product.category}
               </span>
             </div>
-
-            {/* User purchase info */}
-            {showSavings && product.purchase_count && (
-              <div className="mt-2 text-sm text-gray-600">
-                📊 Купувано {product.purchase_count}× •
-                Обикновено плащаш {product.avg_user_paid?.toFixed(2)} лв
-              </div>
-            )}
           </div>
         </div>
       </div>
 
-      {/* Price Comparison */}
+      {/* Price Stats */}
+      <div className="grid grid-cols-3 gap-2 p-4 bg-gray-50 border-b text-center">
+        <div>
+          <div className="text-xs text-gray-600 mb-1">Средна</div>
+          <div className="font-bold text-blue-600">
+            {product.avg_price?.toFixed(2)} лв
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-gray-600 mb-1">Най-ниска</div>
+          <div className="font-bold text-green-600">
+            {product.min_price?.toFixed(2)} лв
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-gray-600 mb-1">Най-висока</div>
+          <div className="font-bold text-red-600">
+            {product.max_price?.toFixed(2)} лв
+          </div>
+        </div>
+      </div>
+
+      {/* Prices List */}
       <div className="p-4">
-        {/* Top 3 Stores */}
         <div className="space-y-2">
-          {product.prices.slice(0, 3).map((price: any, idx: number) => (
+          {product.prices.slice(0, expanded ? undefined : 3).map((price, idx) => (
             <div
               key={idx}
               className={`flex items-center justify-between p-3 rounded-lg ${
                 idx === 0 ? 'bg-green-50 border-2 border-green-500' : 'bg-gray-50'
               }`}
             >
-              <div className="flex items-center gap-3">
-                {idx === 0 && <span className="text-xl">⭐</span>}
+              <div className="flex items-center gap-3 flex-1">
+                {idx === 0 && <span className="text-xl">🏆</span>}
                 <div>
-                  <div className="font-semibold">{price.store}</div>
-                  {idx === 0 && (
-                    <div className="text-xs text-green-600 font-medium">
-                      Най-евтино
+                  <div className="font-semibold">{price.retailer}</div>
+                  {price.is_promotion && (
+                    <div className="text-xs text-red-600 font-medium">
+                      🔥 {price.promotion_text || 'Промоция'}
                     </div>
                   )}
+                  <div className="text-xs text-gray-500">
+                    {price.source === 'manual' ? '📋 Ръчно' : '🧾 От бележки'}
+                  </div>
                 </div>
               </div>
 
               <div className="text-right">
-                <div className="text-xl font-bold">
+                <div className="font-bold text-lg">
                   {price.price.toFixed(2)} лв
                 </div>
                 {idx > 0 && (
-                  <div className="text-sm text-red-600">
-                    +{(price.price - cheapestPrice).toFixed(2)} лв
-                    ({(((price.price - cheapestPrice) / cheapestPrice) * 100).toFixed(0)}%)
+                  <div className="text-xs text-red-600">
+                    +{(price.price - product.min_price).toFixed(2)} лв
                   </div>
                 )}
               </div>
@@ -242,64 +271,45 @@ function ProductPriceCard({ product, rank, showSavings }: any) {
           ))}
         </div>
 
-        {/* Expand for more stores */}
         {product.prices.length > 3 && (
-          <>
-            {expanded && (
-              <div className="space-y-2 mt-2">
-                {product.prices.slice(3).map((price: any, idx: number) => (
-                  <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="font-semibold">{price.store}</div>
-                    <div className="text-right">
-                      <div className="font-bold">{price.price.toFixed(2)} лв</div>
-                      <div className="text-sm text-red-600">
-                        +{(price.price - cheapestPrice).toFixed(2)} лв
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="w-full mt-3 text-sm text-green-600 font-medium hover:text-green-700"
-            >
-              {expanded
-                ? '▲ По-малко'
-                : `▼ Виж още ${product.prices.length - 3} магазина`
-              }
-            </button>
-          </>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="w-full mt-3 text-sm text-green-600 font-medium hover:text-green-700"
+          >
+            {expanded
+              ? '▲ По-малко'
+              : `▼ Виж още ${product.prices.length - 3} магазина`
+            }
+          </button>
         )}
 
-        {/* Savings Highlight */}
-        {showSavings && product.potential_savings > 0 && (
-          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">💡</span>
-              <div className="flex-1">
-                <div className="font-semibold text-yellow-900">
-                  Спести {product.potential_savings.toFixed(2)} лв
-                </div>
-                <div className="text-sm text-yellow-700">
-                  Купувайки от {product.cheapest_store} вместо обичайното място
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* General savings */}
-        {!showSavings && priceDiff > 0 && (
+        {/* Savings Info */}
+        {priceDiff > 0 && (
           <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <div className="text-sm text-blue-900">
-              💰 Разлика между най-евтино и най-скъпо:
-              <span className="font-bold"> {priceDiff.toFixed(2)} лв</span>
-              <span className="text-blue-600"> ({savingsPercent}%)</span>
+            <div className="text-sm">
+              <span className="font-semibold text-blue-900">
+                💡 Спести {priceDiff.toFixed(2)} лв ({savingsPercent}%)
+              </span>
+              <div className="text-blue-700 mt-1">
+                като избереш {product.prices[0]?.retailer} вместо {product.prices[product.prices.length - 1]?.retailer}
+              </div>
             </div>
           </div>
         )}
+
+        {/* Data Source Info */}
+        <div className="mt-3 flex gap-2 text-xs text-gray-600">
+          {product.manual_count > 0 && (
+            <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded">
+              📋 {product.manual_count} ръчни
+            </span>
+          )}
+          {product.user_data_count > 0 && (
+            <span className="bg-green-50 text-green-700 px-2 py-1 rounded">
+              🧾 {product.user_data_count} от бележки
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

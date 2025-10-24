@@ -57,7 +57,9 @@
       "Bash(gh run list:*)",
       "Bash(git fetch:*)",
       "Bash(git check-ignore:*)",
-      "Bash(cat package.json)"
+      "Bash(cat package.json)",
+      "Bash(npm run typecheck)",
+      "Bash(git reset:*)"
     ],
     "deny": [],
     "ask": []
